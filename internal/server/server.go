@@ -80,6 +80,11 @@ func (s *Server) buildRouter() {
 	s.router = r
 }
 
+// MountWebhook adds a webhook handler at /api/v1/webhooks/github.
+func (s *Server) MountWebhook(handler http.Handler) {
+	s.router.Post("/api/v1/webhooks/github", handler.ServeHTTP)
+}
+
 func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	if !s.provider.IsHealthy() {
 		w.WriteHeader(503)
@@ -92,13 +97,18 @@ func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	state := s.provider.GetState()
 	uptime := time.Since(s.provider.StartedAt()).Seconds()
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	resp := map[string]any{
 		"status":         "ok",
 		"uptime_seconds": int(uptime),
 		"auth_mode":      s.provider.AuthMode(),
 		"running_count":  len(state.Running),
-	})
+	}
+	if state.LastPollAt != nil {
+		resp["last_poll_at"] = state.LastPollAt.Format(time.RFC3339)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func (s *Server) handleState(w http.ResponseWriter, _ *http.Request) {
