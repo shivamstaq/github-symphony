@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strings"
+	"text/template"
 
 	"gopkg.in/yaml.v3"
 )
@@ -62,6 +63,18 @@ func LoadWorkflow(path string) (*WorkflowDefinition, error) {
 	}
 
 	wf.Config = m
+
+	// Validate template syntax at parse time
+	if wf.PromptTemplate != "" {
+		if _, err := template.New("prompt").Option("missingkey=error").Parse(wf.PromptTemplate); err != nil {
+			return nil, &WorkflowError{
+				Kind:    ErrTemplateParseError,
+				Message: "invalid prompt template",
+				Cause:   err,
+			}
+		}
+	}
+
 	return wf, nil
 }
 

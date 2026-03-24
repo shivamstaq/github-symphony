@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -195,12 +196,20 @@ func NewServiceConfig(raw map[string]any) (*ServiceConfig, error) {
 	cfg.Workspace = parseWorkspace(intermediate.Workspace, cfg.Workspace)
 	cfg.Hooks = parseHooks(intermediate.Hooks, cfg.Hooks)
 	cfg.Agent = parseAgent(intermediate.Agent, cfg.Agent)
+	cfg.Codex = parseCodex(intermediate.Codex, cfg.Codex)
 	cfg.Claude = parseClaude(intermediate.Claude, cfg.Claude)
+	cfg.OpenCode = parseOpenCode(intermediate.OpenCode, cfg.OpenCode)
 	cfg.PullRequest = parsePullRequest(intermediate.PullRequest, cfg.PullRequest)
 	cfg.Server = parseServer(intermediate.Server, cfg.Server)
 
 	// Resolve environment variables
 	cfg.resolveEnvVars()
+
+	// Resolve path expansion
+	cfg.resolvePathExpansion()
+
+	// Derive workspace defaults
+	cfg.deriveWorkspaceDefaults()
 
 	// Resolve auth mode
 	cfg.resolveAuthMode()
@@ -328,6 +337,7 @@ func parseTracker(raw map[string]any, def TrackerConfig) TrackerConfig {
 	if v, ok := raw["active_values"].([]any); ok { def.ActiveValues = toStringSlice(v) }
 	if v, ok := raw["terminal_values"].([]any); ok { def.TerminalValues = toStringSlice(v) }
 	if v, ok := raw["priority_field_name"].(string); ok { def.PriorityFieldName = v }
+	if v, ok := raw["priority_value_map"].(map[string]any); ok { def.PriorityValueMap = toIntMap(v) }
 	if v, ok := raw["executable_item_types"].([]any); ok { def.ExecutableItemTypes = toStringSlice(v) }
 	if v, ok := raw["require_issue_backing"].(bool); ok { def.RequireIssueBacking = v }
 	if v, ok := raw["allow_draft_issue_conversion"].(bool); ok { def.AllowDraftIssueConvert = v }
@@ -420,6 +430,13 @@ func parseAgent(raw map[string]any, def AgentConfig) AgentConfig {
 	if v, ok := raw["stall_timeout_ms"].(int); ok { def.StallTimeoutMs = v }
 	if v, ok := raw["enable_client_tools"].(bool); ok { def.EnableClientTools = v }
 	if v, ok := raw["enable_mcp"].(bool); ok { def.EnableMCP = v }
+	if v, ok := raw["max_concurrent_agents_by_project_status"].(map[string]any); ok {
+		def.MaxConcurrentByStatus = toIntMap(v)
+	}
+	if v, ok := raw["max_concurrent_agents_by_repo"].(map[string]any); ok {
+		def.MaxConcurrentByRepo = toIntMap(v)
+	}
+	if v, ok := raw["provider_params"].(map[string]any); ok { def.ProviderParams = v }
 	return def
 }
 
@@ -433,6 +450,36 @@ func parseClaude(raw map[string]any, def ClaudeConfig) ClaudeConfig {
 	if v, ok := raw["model"].(string); ok { def.Model = v }
 	if v, ok := raw["continue_on_pause_turn"].(bool); ok { def.ContinueOnPause = v }
 	if v, ok := raw["enable_subagents"].(bool); ok { def.EnableSubagents = v }
+	if v, ok := raw["allowed_tools"].([]any); ok { def.AllowedTools = toStringSlice(v) }
+	if v, ok := raw["mcp_servers"].([]any); ok { def.MCPServers = v }
+	if v, ok := raw["permission_profile"]; ok { def.PermissionProfile = v }
+	if v, ok := raw["provider_params"].(map[string]any); ok { def.ProviderParams = v }
+	return def
+}
+
+func parseCodex(raw map[string]any, def CodexConfig) CodexConfig {
+	if raw == nil {
+		return def
+	}
+	if v, ok := raw["approval_policy"].(string); ok { def.ApprovalPolicy = v }
+	if v, ok := raw["thread_sandbox"].(string); ok { def.ThreadSandbox = v }
+	if v, ok := raw["turn_sandbox_policy"].(string); ok { def.TurnSandboxPolicy = v }
+	if v, ok := raw["listen"].(string); ok { def.Listen = v }
+	if v, ok := raw["schema_bundle_dir"].(string); ok { def.SchemaBundleDir = v }
+	if v, ok := raw["provider_params"].(map[string]any); ok { def.ProviderParams = v }
+	return def
+}
+
+func parseOpenCode(raw map[string]any, def OpenCodeConfig) OpenCodeConfig {
+	if raw == nil {
+		return def
+	}
+	if v, ok := raw["model"].(string); ok { def.Model = v }
+	if v, ok := raw["permission_profile"]; ok { def.PermissionProfile = v }
+	if v, ok := raw["config_file"].(string); ok { def.ConfigFile = v }
+	if v, ok := raw["resume_session"].(bool); ok { def.ResumeSession = v }
+	if v, ok := raw["mcp_servers"].([]any); ok { def.MCPServers = v }
+	if v, ok := raw["provider_params"].(map[string]any); ok { def.ProviderParams = v }
 	return def
 }
 
@@ -446,6 +493,7 @@ func parsePullRequest(raw map[string]any, def PullRequestConfig) PullRequestConf
 	if v, ok := raw["handoff_project_status"].(string); ok { def.HandoffProjectStatus = v }
 	if v, ok := raw["comment_on_issue_with_pr"].(bool); ok { def.CommentOnIssueWithPR = v }
 	if v, ok := raw["close_issue_on_merge"].(bool); ok { def.CloseIssueOnMerge = v }
+	if v, ok := raw["required_before_handoff_checks"].([]any); ok { def.RequiredBeforeHandoff = toStringSlice(v) }
 	return def
 }
 
@@ -457,6 +505,7 @@ func parseServer(raw map[string]any, def ServerConfig) ServerConfig {
 	if v, ok := raw["host"].(string); ok { def.Host = v }
 	if v, ok := raw["read_timeout_ms"].(int); ok { def.ReadTimeoutMs = v }
 	if v, ok := raw["write_timeout_ms"].(int); ok { def.WriteTimeoutMs = v }
+	if v, ok := raw["cors_origins"].([]any); ok { def.CORSOrigins = toStringSlice(v) }
 	return def
 }
 
@@ -468,4 +517,51 @@ func toStringSlice(raw []any) []string {
 		}
 	}
 	return out
+}
+
+func toIntMap(raw map[string]any) map[string]int {
+	out := make(map[string]int, len(raw))
+	for k, v := range raw {
+		switch val := v.(type) {
+		case int:
+			out[k] = val
+		case float64:
+			out[k] = int(val)
+		}
+	}
+	return out
+}
+
+func (c *ServiceConfig) resolvePathExpansion() {
+	c.Workspace.Root = expandPath(c.Workspace.Root)
+	c.Workspace.RepoCacheDir = expandPath(c.Workspace.RepoCacheDir)
+	c.Workspace.WorktreeDir = expandPath(c.Workspace.WorktreeDir)
+	c.Codex.SchemaBundleDir = expandPath(c.Codex.SchemaBundleDir)
+	c.OpenCode.ConfigFile = expandPath(c.OpenCode.ConfigFile)
+}
+
+func (c *ServiceConfig) deriveWorkspaceDefaults() {
+	if c.Workspace.Root == "" {
+		c.Workspace.Root = filepath.Join(os.TempDir(), "symphony_workspaces")
+	}
+	if c.Workspace.RepoCacheDir == "" {
+		c.Workspace.RepoCacheDir = filepath.Join(c.Workspace.Root, "repo_cache")
+	}
+	if c.Workspace.WorktreeDir == "" {
+		c.Workspace.WorktreeDir = filepath.Join(c.Workspace.Root, "worktrees")
+	}
+}
+
+// expandPath resolves ~ to home dir and $VAR in path strings.
+func expandPath(p string) string {
+	if p == "" {
+		return p
+	}
+	if strings.HasPrefix(p, "~/") || p == "~" {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			p = filepath.Join(home, p[1:])
+		}
+	}
+	return os.ExpandEnv(p)
 }
