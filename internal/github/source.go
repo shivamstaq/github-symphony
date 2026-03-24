@@ -138,13 +138,13 @@ func NormalizeWorkItem(raw WorkItemRaw, priorityMap map[string]int) NormalizedIt
 
 	// Blockers
 	for _, b := range raw.BlockedBy {
-		item.BlockedBy = append(item.BlockedBy, NormalizedBlocker{ID: b.ID, Identifier: b.Identifier, State: b.State})
+		item.BlockedBy = append(item.BlockedBy, NormalizedBlocker(b))
 	}
 	for _, s := range raw.SubIssues {
-		item.SubIssues = append(item.SubIssues, NormalizedChild{ID: s.ID, Identifier: s.Identifier, State: s.State})
+		item.SubIssues = append(item.SubIssues, NormalizedChild(s))
 	}
 	for _, p := range raw.LinkedPRs {
-		item.LinkedPRs = append(item.LinkedPRs, NormalizedPR{ID: p.ID, Number: p.Number, State: p.State, IsDraft: p.IsDraft, URL: p.URL})
+		item.LinkedPRs = append(item.LinkedPRs, NormalizedPR(p))
 	}
 
 	return item

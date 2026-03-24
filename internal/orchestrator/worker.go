@@ -91,7 +91,7 @@ func (r *Runner) Run(ctx context.Context, item WorkItem, attempt *int) WorkerRes
 		r.runAfterHook(ctx, ws.Path, hookTimeout)
 		return WorkerResult{WorkItemID: item.WorkItemID, Outcome: OutcomeFailure, Error: err}
 	}
-	defer adapterClient.Close()
+	defer func() { _ = adapterClient.Close() }()
 
 	if _, err := adapterClient.Initialize(ctx); err != nil {
 		logger.Error("adapter initialize failed", "error", err)

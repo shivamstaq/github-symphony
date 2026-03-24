@@ -121,7 +121,7 @@ func main() {
 		logger.Error("state store open failed", "error", err)
 		os.Exit(1)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	// Create GitHub auth provider
 	authProvider := ghub.NewPATProvider(cfg.GitHub.Token)
@@ -307,7 +307,7 @@ func main() {
 	if err != nil {
 		logger.Warn("workflow watcher failed to start", "error", err)
 	} else {
-		defer watcher.Close()
+		defer func() { _ = watcher.Close() }()
 	}
 
 	// Signal handling
@@ -360,7 +360,6 @@ type orchestratorStateProvider struct {
 	orch      *orchestrator.Orchestrator
 	authMode  string
 	startedAt time.Time
-	healthy   bool
 }
 
 func (p *orchestratorStateProvider) GetState() orchestrator.State { return p.orch.GetState() }
@@ -431,7 +430,7 @@ func runDoctor(cfg *config.ServiceConfig, wsRoot, stateDir string) {
 			fmt.Printf("FAIL: GitHub connectivity: %v\n", err)
 			os.Exit(1)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode == 200 {
 			fmt.Println("PASS: GitHub API connectivity verified")
 		} else {

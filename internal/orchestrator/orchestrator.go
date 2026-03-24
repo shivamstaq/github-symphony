@@ -299,12 +299,7 @@ func (o *Orchestrator) fireDueRetries(ctx context.Context) {
 		return
 	}
 
-	// Fetch current state for due items
-	var dueIDs []string
-	for _, e := range dueEntries {
-		dueIDs = append(dueIDs, e.WorkItemID)
-	}
-
+	// Fetch current candidates to check eligibility
 	candidates, err := o.source.FetchCandidates(ctx)
 	if err != nil {
 		slog.Warn("retry fetch failed", "error", err)
