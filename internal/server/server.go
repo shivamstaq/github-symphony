@@ -211,5 +211,31 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	fmt.Fprintf(&sb, "# TYPE symphony_github_writebacks_total counter\n")
 	fmt.Fprintf(&sb, "symphony_github_writebacks_total %d\n", state.AgentTotals.GitHubWritebacks)
 
+	// Dispatches total
+	fmt.Fprintf(&sb, "# HELP symphony_dispatches_total Total dispatches\n")
+	fmt.Fprintf(&sb, "# TYPE symphony_dispatches_total counter\n")
+	fmt.Fprintf(&sb, "symphony_dispatches_total %d\n", state.DispatchTotal)
+
+	// Work item state distribution
+	fmt.Fprintf(&sb, "# HELP symphony_work_item_state Count of work items by orchestration state\n")
+	fmt.Fprintf(&sb, "# TYPE symphony_work_item_state gauge\n")
+	fmt.Fprintf(&sb, "symphony_work_item_state{state=\"running\"} %d\n", len(state.Running))
+	fmt.Fprintf(&sb, "symphony_work_item_state{state=\"retry_queued\"} %d\n", len(state.RetryAttempts))
+	handedOff := 0
+	if state.HandedOff != nil {
+		handedOff = len(state.HandedOff)
+	}
+	fmt.Fprintf(&sb, "symphony_work_item_state{state=\"handed_off\"} %d\n", handedOff)
+
+	// Errors total
+	fmt.Fprintf(&sb, "# HELP symphony_errors_total Total errors by category\n")
+	fmt.Fprintf(&sb, "# TYPE symphony_errors_total counter\n")
+	fmt.Fprintf(&sb, "symphony_errors_total %d\n", state.ErrorTotal)
+
+	// PR handoffs total
+	fmt.Fprintf(&sb, "# HELP symphony_pr_handoffs_total Total PR handoffs\n")
+	fmt.Fprintf(&sb, "# TYPE symphony_pr_handoffs_total counter\n")
+	fmt.Fprintf(&sb, "symphony_pr_handoffs_total %d\n", state.HandoffTotal)
+
 	_, _ = w.Write([]byte(sb.String()))
 }

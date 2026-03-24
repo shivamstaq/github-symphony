@@ -9,9 +9,10 @@ import (
 )
 
 var (
-	bucketRetries = []byte("retries")
-	bucketTotals  = []byte("totals")
-	keyTotals     = []byte("agent_totals")
+	bucketRetries  = []byte("retries")
+	bucketTotals   = []byte("totals")
+	bucketSessions = []byte("sessions")
+	keyTotals      = []byte("agent_totals")
 )
 
 // RetryRecord is a persistent retry entry.
@@ -52,6 +53,9 @@ func Open(path string) (*Store, error) {
 			return err
 		}
 		if _, err := tx.CreateBucketIfNotExists(bucketTotals); err != nil {
+			return err
+		}
+		if _, err := tx.CreateBucketIfNotExists(bucketSessions); err != nil {
 			return err
 		}
 		return nil
@@ -129,4 +133,43 @@ func (s *Store) LoadTotals() (AgentTotalsRecord, error) {
 		return json.Unmarshal(data, &t)
 	})
 	return t, err
+}
+
+// SessionRecord persists last-known session metadata.
+type SessionRecord struct {
+	WorkItemID      string `json:"work_item_id"`
+	SessionID       string `json:"session_id"`
+	NativeSessionID string `json:"native_session_id,omitempty"`
+	NativeTurnID    string `json:"native_turn_id,omitempty"`
+	AdapterKind     string `json:"adapter_kind"`
+	LastStatus      string `json:"last_status,omitempty"`
+}
+
+// SaveSession persists session metadata.
+func (s *Store) SaveSession(r SessionRecord) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bucketSessions)
+		data, err := json.Marshal(r)
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte(r.WorkItemID), data)
+	})
+}
+
+// LoadSessions returns all persisted session records.
+func (s *Store) LoadSessions() ([]SessionRecord, error) {
+	var records []SessionRecord
+	err := s.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bucketSessions)
+		return b.ForEach(func(_, v []byte) error {
+			var r SessionRecord
+			if err := json.Unmarshal(v, &r); err != nil {
+				return err
+			}
+			records = append(records, r)
+			return nil
+		})
+	})
+	return records, err
 }
