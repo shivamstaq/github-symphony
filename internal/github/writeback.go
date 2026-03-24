@@ -108,7 +108,7 @@ func (wb *WriteBack) restPost(ctx context.Context, path string, body any) (map[s
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

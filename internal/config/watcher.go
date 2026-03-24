@@ -28,7 +28,7 @@ func NewWatcher(path string, callback WatcherCallback) (*Watcher, error) {
 	}
 
 	if err := fw.Add(path); err != nil {
-		fw.Close()
+		_ = fw.Close()
 		return nil, err
 	}
 

@@ -43,9 +43,8 @@ type PromptResult struct {
 
 // Adapter manages the Claude Code sidecar subprocess.
 type Adapter struct {
-	sub     *adapter.SubprocessAdapter
-	nextID  atomic.Int64
-	updates chan adapter.Message
+	sub    *adapter.SubprocessAdapter
+	nextID atomic.Int64
 }
 
 // New creates and starts the Claude Code adapter subprocess.

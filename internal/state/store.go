@@ -56,7 +56,7 @@ func Open(path string) (*Store, error) {
 		return nil
 	})
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("state store init: %w", err)
 	}
 

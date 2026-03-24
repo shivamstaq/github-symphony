@@ -137,9 +137,9 @@ func (a *SubprocessAdapter) Updates() <-chan *Message {
 
 // Close terminates the subprocess.
 func (a *SubprocessAdapter) Close() error {
-	a.stdin.Close()
+	_ = a.stdin.Close()
 	err := a.cmd.Process.Kill()
-	a.cmd.Wait()
+	_ = a.cmd.Wait()
 	close(a.done)
 	return err
 }

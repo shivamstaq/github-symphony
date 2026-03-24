@@ -201,5 +201,5 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	fmt.Fprintf(&sb, "# TYPE symphony_github_writebacks_total counter\n")
 	fmt.Fprintf(&sb, "symphony_github_writebacks_total %d\n", state.AgentTotals.GitHubWritebacks)
 
-	w.Write([]byte(sb.String()))
+	_, _ = w.Write([]byte(sb.String()))
 }

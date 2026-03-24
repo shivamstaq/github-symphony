@@ -39,13 +39,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	sigHeader := r.Header.Get("X-Hub-Signature-256")
 	if sigHeader == "" {
 		slog.Warn("webhook: missing signature header")
-		http.Error(w, "missing signature", 401)
+		http.Error(w, "missing signature", http.StatusUnauthorized)
 		return
 	}
 
 	if !h.verifySignature(body, sigHeader) {
 		slog.Warn("webhook: invalid signature")
-		http.Error(w, "invalid signature", 401)
+		http.Error(w, "invalid signature", http.StatusUnauthorized)
 		return
 	}
 
@@ -61,7 +61,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.callback(eventType, body)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 }
 
 func (h *Handler) verifySignature(body []byte, sigHeader string) bool {
