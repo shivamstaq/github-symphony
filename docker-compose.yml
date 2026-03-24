@@ -1,0 +1,47 @@
+services:
+  symphony:
+    build: .
+    env_file: .env
+    volumes:
+      - ./WORKFLOW.md:/app/WORKFLOW.md:ro
+      - workspaces:/app/workspaces
+      - state:/app/.symphony
+    ports:
+      - "9097:9097"
+    command: ["--port", "9097", "--state-dir", "/app/.symphony"]
+    restart: unless-stopped
+    depends_on:
+      - victoriametrics
+
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:latest
+    ports:
+      - "8428:8428"
+    volumes:
+      - vm-data:/storage
+      - ./deploy/victoriametrics/scrape.yml:/etc/prometheus/scrape.yml:ro
+    command:
+      - -promscrape.config=/etc/prometheus/scrape.yml
+      - -retentionPeriod=30d
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3097:3000"
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    restart: unless-stopped
+    depends_on:
+      - victoriametrics
+
+volumes:
+  workspaces:
+  state:
+  vm-data:
+  grafana-data:

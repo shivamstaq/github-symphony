@@ -1,0 +1,101 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Active Runs",
+      "type": "gauge",
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
+      "targets": [{"expr": "symphony_active_runs", "legendFormat": "Active"}],
+      "fieldConfig": {
+        "defaults": {
+          "max": 20,
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 5},
+              {"color": "red", "value": 10}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Max Concurrent Agents",
+      "type": "stat",
+      "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0},
+      "targets": [{"expr": "symphony_max_concurrent_agents", "legendFormat": "Max"}]
+    },
+    {
+      "title": "Retry Queue Depth",
+      "type": "gauge",
+      "gridPos": {"h": 6, "w": 6, "x": 12, "y": 0},
+      "targets": [{"expr": "symphony_retry_queue_depth", "legendFormat": "Retrying"}],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 3},
+              {"color": "red", "value": 10}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Sessions Started",
+      "type": "stat",
+      "gridPos": {"h": 6, "w": 6, "x": 18, "y": 0},
+      "targets": [{"expr": "symphony_sessions_started_total", "legendFormat": "Total"}]
+    },
+    {
+      "title": "Token Usage Over Time",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+      "targets": [
+        {"expr": "rate(symphony_tokens_total{direction=\"input\"}[5m])", "legendFormat": "Input tokens/s"},
+        {"expr": "rate(symphony_tokens_total{direction=\"output\"}[5m])", "legendFormat": "Output tokens/s"}
+      ]
+    },
+    {
+      "title": "GitHub Writebacks",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+      "targets": [
+        {"expr": "rate(symphony_github_writebacks_total[5m])", "legendFormat": "Writebacks/s"}
+      ]
+    },
+    {
+      "title": "Active Runs Over Time",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+      "targets": [
+        {"expr": "symphony_active_runs", "legendFormat": "Running"},
+        {"expr": "symphony_retry_queue_depth", "legendFormat": "Retrying"}
+      ]
+    },
+    {
+      "title": "Cumulative Tokens",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
+      "targets": [
+        {"expr": "symphony_tokens_total{direction=\"total\"}", "legendFormat": "Total Tokens"}
+      ],
+      "fieldConfig": {
+        "defaults": {"unit": "short"}
+      }
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["symphony"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "title": "Symphony",
+  "uid": "symphony-main",
+  "version": 1
+}
