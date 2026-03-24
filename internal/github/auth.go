@@ -70,3 +70,23 @@ func (t *AuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	return base.RoundTrip(req)
 }
+
+// AppProvider is a stub for GitHub App auth.
+// It satisfies the AuthProvider interface but returns an error directing users to PAT mode.
+type AppProvider struct{}
+
+func NewAppProvider() *AppProvider {
+	return &AppProvider{}
+}
+
+func (p *AppProvider) Token(_ context.Context, _ RepoRef) (string, error) {
+	return "", fmt.Errorf("github_auth_error: GitHub App auth not yet implemented, use PAT mode (set GITHUB_TOKEN)")
+}
+
+func (p *AppProvider) HTTPClient(_ context.Context, _ RepoRef) (*http.Client, error) {
+	return nil, fmt.Errorf("github_auth_error: GitHub App auth not yet implemented, use PAT mode")
+}
+
+func (p *AppProvider) Mode() string {
+	return "app"
+}

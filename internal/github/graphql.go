@@ -421,6 +421,33 @@ func (c *GraphQLClient) FetchIssueDetails(ctx context.Context, items []WorkItemR
 	return items, nil
 }
 
+// ConvertDraftIssue converts a draft project item to a real issue.
+func (c *GraphQLClient) ConvertDraftIssue(ctx context.Context, itemID, repoID string) (string, error) {
+	query := `mutation($itemId: ID!, $repositoryId: ID!) {
+		convertProjectV2DraftIssueItemToIssue(input: {
+			itemId: $itemId
+			repositoryId: $repositoryId
+		}) {
+			item { id }
+		}
+	}`
+
+	data, err := c.doGraphQL(ctx, query, map[string]any{
+		"itemId":       itemID,
+		"repositoryId": repoID,
+	})
+	if err != nil {
+		return "", fmt.Errorf("convert draft issue: %w", err)
+	}
+
+	if convert, ok := data["convertProjectV2DraftIssueItemToIssue"].(map[string]any); ok {
+		if item, ok := convert["item"].(map[string]any); ok {
+			return getString(item, "id"), nil
+		}
+	}
+	return "", nil
+}
+
 func getBool(m map[string]any, key string) bool {
 	if v, ok := m[key].(bool); ok {
 		return v
