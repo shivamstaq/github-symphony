@@ -32,9 +32,14 @@ const (
 	UpdateToolCallFailed  UpdateKind = "tool_call_failed"
 	UpdateTokenUsage      UpdateKind = "token_usage"
 	UpdateRateLimits      UpdateKind = "rate_limits"
-	UpdateCompleted       UpdateKind = "completed"
-	UpdateFailed          UpdateKind = "failed"
-	UpdateWarning         UpdateKind = "warning"
+	UpdateApprovalAutoApproved UpdateKind = "approval_auto_approved"
+	UpdateApprovalRequested    UpdateKind = "approval_requested"
+	UpdateInputRequested       UpdateKind = "input_requested"
+	UpdateCompleted            UpdateKind = "completed"
+	UpdateFailed               UpdateKind = "failed"
+	UpdateWarning              UpdateKind = "warning"
+	UpdateNotification         UpdateKind = "notification"
+	UpdateMalformed            UpdateKind = "malformed"
 )
 
 // Request is a JSON-RPC-style request.
