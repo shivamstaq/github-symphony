@@ -119,9 +119,6 @@ type CodexConfig struct {
 }
 
 type ClaudeConfig struct {
-	AdapterMode       string
-	SDKLanguage       string
-	SidecarCommand    string
 	Model             string
 	AllowedTools      []string
 	MCPServers        []any
@@ -259,9 +256,6 @@ func (c *ServiceConfig) applyDefaults() {
 		EnableMCP:           true,
 	}
 	c.Claude = ClaudeConfig{
-		AdapterMode:     "sdk_sidecar",
-		SDKLanguage:     "typescript",
-		SidecarCommand:  "", // resolved to absolute path at startup in main.go
 		ContinueOnPause: true,
 	}
 	c.OpenCode = OpenCodeConfig{
@@ -444,9 +438,6 @@ func parseClaude(raw map[string]any, def ClaudeConfig) ClaudeConfig {
 	if raw == nil {
 		return def
 	}
-	if v, ok := raw["adapter_mode"].(string); ok { def.AdapterMode = v }
-	if v, ok := raw["sdk_language"].(string); ok { def.SDKLanguage = v }
-	if v, ok := raw["sidecar_command"].(string); ok { def.SidecarCommand = v }
 	if v, ok := raw["model"].(string); ok { def.Model = v }
 	if v, ok := raw["continue_on_pause_turn"].(bool); ok { def.ContinueOnPause = v }
 	if v, ok := raw["enable_subagents"].(bool); ok { def.EnableSubagents = v }

@@ -17,7 +17,13 @@ func NewAdapter(cfg AdapterConfig) (AdapterClient, error) {
 
 	switch cfg.Kind {
 	case "claude_code":
-		return newGenericAdapter(cfg, "claude_code")
+		return NewClaudeCLI(ClaudeCLIConfig{
+			Binary:         cfg.Command,
+			Model:          cfg.Model,
+			AllowedTools:   cfg.AllowedTools,
+			PermissionMode: cfg.PermissionMode,
+			Cwd:            cfg.Cwd,
+		}), nil
 	case "opencode":
 		return newGenericAdapter(cfg, "opencode")
 	case "codex":
@@ -28,6 +34,7 @@ func NewAdapter(cfg AdapterConfig) (AdapterClient, error) {
 }
 
 // genericAdapter wraps SubprocessAdapter with the unified AdapterClient interface.
+// Used for OpenCode and Codex which speak JSON-RPC over stdio.
 type genericAdapter struct {
 	sub      *SubprocessAdapter
 	provider string
@@ -94,12 +101,6 @@ func (a *genericAdapter) NewSession(ctx context.Context, params SessionParams) (
 	}
 	if params.ProviderParams != nil {
 		p["providerParams"] = map[string]any{a.provider: params.ProviderParams}
-	}
-	if params.Tools != nil {
-		p["tools"] = params.Tools
-	}
-	if params.MCPServers != nil {
-		p["mcpServers"] = params.MCPServers
 	}
 
 	resp, err := a.sub.SendRequest(ctx, Request{ID: a.allocID(), Method: "session/new", Params: p})

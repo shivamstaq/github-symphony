@@ -38,10 +38,12 @@ type PromptResult struct {
 
 // AdapterConfig holds configuration for creating an adapter.
 type AdapterConfig struct {
-	Kind       string // "claude_code", "opencode", "codex"
-	Command    string
-	Args       []string
-	Cwd        string
-	Env        []string
-	Model      string
+	Kind           string // "claude_code", "opencode", "codex"
+	Command        string
+	Args           []string
+	Cwd            string
+	Env            []string
+	Model          string
+	AllowedTools   []string // for Claude CLI: restrict tools
+	PermissionMode string   // for Claude CLI: permission handling mode
 }

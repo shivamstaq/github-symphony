@@ -173,24 +173,6 @@ func main() {
 		},
 	})
 
-	// Resolve sidecar script path to absolute (relative to where symphony was invoked)
-	symphonyDir, _ := os.Getwd()
-	var sidecarScript string
-	if cfg.Agent.Kind == "claude_code" {
-		sidecarScript = cfg.Claude.SidecarCommand
-		if sidecarScript == "" {
-			sidecarScript = filepath.Join(symphonyDir, "sidecar", "claude", "src", "index.ts")
-		} else if !filepath.IsAbs(sidecarScript) {
-			sidecarScript = filepath.Join(symphonyDir, sidecarScript)
-		}
-		// Validate sidecar script exists
-		if _, err := os.Stat(sidecarScript); err != nil {
-			logger.Error("sidecar script not found", "path", sidecarScript, "error", err)
-			os.Exit(1)
-		}
-		logger.Info("sidecar script resolved", "path", sidecarScript)
-	}
-
 	// Create worker runner
 	runner := orchestrator.NewRunner(orchestrator.WorkerDeps{
 		WorkspaceManager: wsMgr,
@@ -201,8 +183,14 @@ func main() {
 			}
 			switch cfg.Agent.Kind {
 			case "claude_code":
-				acfg.Command = "tsx"
-				acfg.Args = []string{sidecarScript}
+				acfg.Command = "claude" // uses locally-authenticated claude CLI
+				acfg.Model = cfg.Claude.Model
+				acfg.AllowedTools = cfg.Claude.AllowedTools
+				permMode := "bypassPermissions"
+				if p, ok := cfg.Claude.PermissionProfile.(string); ok && p != "" {
+					permMode = p
+				}
+				acfg.PermissionMode = permMode
 			case "opencode":
 				acfg.Command = "opencode"
 				acfg.Args = []string{"acp"}
@@ -395,27 +383,13 @@ func runDoctor(cfg *config.ServiceConfig, wsRoot, stateDir string) {
 	// Check agent runtime
 	switch cfg.Agent.Kind {
 	case "claude_code":
-		if err := checkBinaryExists("node"); err != nil {
-			fmt.Printf("FAIL: node not found on PATH: %v\n", err)
+		if err := checkBinaryExists("claude"); err != nil {
+			fmt.Printf("FAIL: claude CLI not found on PATH: %v\n", err)
+			fmt.Println("  Install: https://docs.anthropic.com/en/docs/claude-code")
+			fmt.Println("  Then run: claude login")
 			os.Exit(1)
 		}
-		fmt.Println("PASS: node found on PATH")
-		if err := checkBinaryExists("tsx"); err != nil {
-			fmt.Printf("FAIL: tsx not found on PATH: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Println("PASS: tsx found on PATH")
-		// Check sidecar script
-		sidecar := cfg.Claude.SidecarCommand
-		if sidecar == "" {
-			cwd, _ := os.Getwd()
-			sidecar = filepath.Join(cwd, "sidecar", "claude", "src", "index.ts")
-		}
-		if _, err := os.Stat(sidecar); err != nil {
-			fmt.Printf("FAIL: sidecar script not found: %s\n", sidecar)
-			os.Exit(1)
-		}
-		fmt.Printf("PASS: sidecar script found: %s\n", sidecar)
+		fmt.Println("PASS: claude CLI found on PATH")
 	case "opencode":
 		if err := checkBinaryExists("opencode"); err != nil {
 			fmt.Printf("FAIL: opencode not found on PATH: %v\n", err)
