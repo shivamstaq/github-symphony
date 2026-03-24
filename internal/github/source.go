@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-
-	"github.com/shivamstaq/github-symphony/internal/orchestrator"
 )
 
 // SourceConfig holds parameters for the GitHub source adapter.
@@ -19,7 +17,7 @@ type SourceConfig struct {
 	PriorityValueMap map[string]int
 }
 
-// Source implements orchestrator.WorkItemSource by bridging GraphQL to the domain model.
+// Source fetches project items from GitHub and normalizes them.
 type Source struct {
 	client *GraphQLClient
 	cfg    SourceConfig
@@ -30,9 +28,9 @@ func NewSource(client *GraphQLClient, cfg SourceConfig) *Source {
 	return &Source{client: client, cfg: cfg}
 }
 
-// FetchCandidates fetches project items and normalizes them to WorkItems (two-pass).
-func (s *Source) FetchCandidates(ctx context.Context) ([]orchestrator.WorkItem, error) {
-	// Pass 1: lightweight fetch of project items with status
+// FetchCandidateRaw fetches project items with two-pass enrichment, returns raw items.
+func (s *Source) FetchCandidateRaw(ctx context.Context) ([]WorkItemRaw, error) {
+	// Pass 1: lightweight fetch
 	rawItems, err := s.client.FetchProjectItems(ctx, ProjectQuery{
 		Owner:           s.cfg.Owner,
 		ProjectNumber:   s.cfg.ProjectNumber,
@@ -43,61 +41,33 @@ func (s *Source) FetchCandidates(ctx context.Context) ([]orchestrator.WorkItem, 
 	if err != nil {
 		return nil, fmt.Errorf("github source: fetch candidates: %w", err)
 	}
-
 	if len(rawItems) == 0 {
 		return nil, nil
 	}
 
-	// Pass 2: enrich issues with full details
+	// Pass 2: enrich issues
 	rawItems, err = s.client.FetchIssueDetails(ctx, rawItems)
 	if err != nil {
 		slog.Warn("github source: pass 2 partial failure", "error", err)
-		// Continue with partial data
 	}
 
-	// Normalize to domain model
-	var items []orchestrator.WorkItem
-	for _, raw := range rawItems {
-		item := NormalizeWorkItem(raw, s.cfg.PriorityValueMap)
-		items = append(items, item)
-	}
-
-	slog.Info("github source: fetched candidates", "count", len(items))
-	return items, nil
+	slog.Info("github source: fetched candidates", "count", len(rawItems))
+	return rawItems, nil
 }
 
-// FetchStates fetches current state for specific work items (used by reconciliation).
-func (s *Source) FetchStates(ctx context.Context, workItemIDs []string) ([]orchestrator.WorkItem, error) {
-	// Re-fetch all candidates and filter to the requested IDs
-	// A more efficient implementation would query by node IDs directly
-	allItems, err := s.FetchCandidates(ctx)
+// FetchStateRaw fetches current state for specific issue IDs.
+func (s *Source) FetchStateRaw(ctx context.Context) ([]WorkItemRaw, error) {
+	return s.FetchCandidateRaw(ctx)
+}
+
+// FetchTerminalRaw fetches items in terminal statuses.
+func (s *Source) FetchTerminalRaw(ctx context.Context, terminalValues []string) ([]WorkItemRaw, error) {
+	all, err := s.FetchCandidateRaw(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	idSet := make(map[string]bool, len(workItemIDs))
-	for _, id := range workItemIDs {
-		idSet[id] = true
-	}
-
-	var matched []orchestrator.WorkItem
-	for _, item := range allItems {
-		if idSet[item.WorkItemID] {
-			matched = append(matched, item)
-		}
-	}
-	return matched, nil
-}
-
-// FetchTerminalItems fetches items in terminal project statuses (for startup cleanup).
-func (s *Source) FetchTerminalItems(ctx context.Context, terminalValues []string) ([]orchestrator.WorkItem, error) {
-	allItems, err := s.FetchCandidates(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var terminal []orchestrator.WorkItem
-	for _, item := range allItems {
+	var terminal []WorkItemRaw
+	for _, item := range all {
 		for _, tv := range terminalValues {
 			if strings.EqualFold(item.ProjectStatus, tv) {
 				terminal = append(terminal, item)
@@ -108,9 +78,9 @@ func (s *Source) FetchTerminalItems(ctx context.Context, terminalValues []string
 	return terminal, nil
 }
 
-// NormalizeWorkItem converts a raw GitHub item to the orchestrator domain model.
-func NormalizeWorkItem(raw WorkItemRaw, priorityMap map[string]int) orchestrator.WorkItem {
-	item := orchestrator.WorkItem{
+// NormalizeWorkItem converts a raw GitHub item to a NormalizedItem with all derived fields.
+func NormalizeWorkItem(raw WorkItemRaw, priorityMap map[string]int) NormalizedItem {
+	item := NormalizedItem{
 		ProjectItemID: raw.ProjectItemID,
 		ContentType:   raw.ContentType,
 		IssueID:       raw.IssueID,
@@ -127,37 +97,37 @@ func NormalizeWorkItem(raw WorkItemRaw, priorityMap map[string]int) orchestrator
 		UpdatedAt:     raw.UpdatedAt,
 	}
 
-	// Derive work_item_id: github:<project_item_id>:<issue_id or content_type>
+	// Derive work_item_id
 	if raw.IssueID != "" {
 		item.WorkItemID = fmt.Sprintf("github:%s:%s", raw.ProjectItemID, raw.IssueID)
 	} else {
 		item.WorkItemID = fmt.Sprintf("github:%s:%s", raw.ProjectItemID, raw.ContentType)
 	}
 
-	// Derive issue_identifier: owner/repo#number
+	// Derive issue_identifier
 	if raw.Repository != nil && raw.IssueNumber != nil {
 		item.IssueIdentifier = fmt.Sprintf("%s#%d", raw.Repository.FullName, *raw.IssueNumber)
 	}
 
-	// Normalize labels to lowercase
+	// Lowercase labels
 	for i, l := range item.Labels {
 		item.Labels[i] = strings.ToLower(l)
 	}
 
-	// Derive priority from field value map
+	// Priority from value map
 	if raw.Priority != "" && priorityMap != nil {
 		if p, ok := priorityMap[raw.Priority]; ok {
 			item.Priority = &p
 		}
 	}
 
-	// Map repository
+	// Repository with derived clone URL
 	if raw.Repository != nil {
 		cloneURL := raw.Repository.CloneURLHTTPS
 		if cloneURL == "" && raw.Repository.FullName != "" {
 			cloneURL = fmt.Sprintf("https://github.com/%s.git", raw.Repository.FullName)
 		}
-		item.Repository = &orchestrator.Repository{
+		item.Repository = &NormalizedRepo{
 			Owner:         raw.Repository.Owner,
 			Name:          raw.Repository.Name,
 			FullName:      raw.Repository.FullName,
@@ -166,34 +136,61 @@ func NormalizeWorkItem(raw WorkItemRaw, priorityMap map[string]int) orchestrator
 		}
 	}
 
-	// Map blockers
+	// Blockers
 	for _, b := range raw.BlockedBy {
-		item.BlockedBy = append(item.BlockedBy, orchestrator.BlockerRef{
-			ID:         b.ID,
-			Identifier: b.Identifier,
-			State:      b.State,
-		})
+		item.BlockedBy = append(item.BlockedBy, NormalizedBlocker{ID: b.ID, Identifier: b.Identifier, State: b.State})
 	}
-
-	// Map sub-issues
 	for _, s := range raw.SubIssues {
-		item.SubIssues = append(item.SubIssues, orchestrator.ChildRef{
-			ID:         s.ID,
-			Identifier: s.Identifier,
-			State:      s.State,
-		})
+		item.SubIssues = append(item.SubIssues, NormalizedChild{ID: s.ID, Identifier: s.Identifier, State: s.State})
 	}
-
-	// Map linked PRs
 	for _, p := range raw.LinkedPRs {
-		item.LinkedPRs = append(item.LinkedPRs, orchestrator.PRRef{
-			ID:      p.ID,
-			Number:  p.Number,
-			State:   p.State,
-			IsDraft: p.IsDraft,
-			URL:     p.URL,
-		})
+		item.LinkedPRs = append(item.LinkedPRs, NormalizedPR{ID: p.ID, Number: p.Number, State: p.State, IsDraft: p.IsDraft, URL: p.URL})
 	}
 
 	return item
+}
+
+// NormalizedItem is the fully-normalized work item (github-package local, no import cycle).
+type NormalizedItem struct {
+	WorkItemID      string
+	ProjectItemID   string
+	ContentType     string
+	IssueID         string
+	IssueNumber     *int
+	IssueIdentifier string
+	Title           string
+	Description     string
+	State           string
+	ProjectStatus   string
+	Priority        *int
+	Labels          []string
+	Assignees       []string
+	Milestone       string
+	URL             string
+	CreatedAt       string
+	UpdatedAt       string
+	Repository      *NormalizedRepo
+	BlockedBy       []NormalizedBlocker
+	SubIssues       []NormalizedChild
+	LinkedPRs       []NormalizedPR
+}
+
+type NormalizedRepo struct {
+	Owner, Name, FullName, DefaultBranch, CloneURLHTTPS string
+}
+
+type NormalizedBlocker struct {
+	ID, Identifier, State string
+}
+
+type NormalizedChild struct {
+	ID, Identifier, State string
+}
+
+type NormalizedPR struct {
+	ID      string
+	Number  int
+	State   string
+	IsDraft bool
+	URL     string
 }
