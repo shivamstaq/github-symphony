@@ -261,7 +261,7 @@ func (c *ServiceConfig) applyDefaults() {
 	c.Claude = ClaudeConfig{
 		AdapterMode:     "sdk_sidecar",
 		SDKLanguage:     "typescript",
-		SidecarCommand:  "tsx sidecar/claude/src/index.ts",
+		SidecarCommand:  "", // resolved to absolute path at startup in main.go
 		ContinueOnPause: true,
 	}
 	c.OpenCode = OpenCodeConfig{

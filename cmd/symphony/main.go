@@ -173,6 +173,24 @@ func main() {
 		},
 	})
 
+	// Resolve sidecar script path to absolute (relative to where symphony was invoked)
+	symphonyDir, _ := os.Getwd()
+	var sidecarScript string
+	if cfg.Agent.Kind == "claude_code" {
+		sidecarScript = cfg.Claude.SidecarCommand
+		if sidecarScript == "" {
+			sidecarScript = filepath.Join(symphonyDir, "sidecar", "claude", "src", "index.ts")
+		} else if !filepath.IsAbs(sidecarScript) {
+			sidecarScript = filepath.Join(symphonyDir, sidecarScript)
+		}
+		// Validate sidecar script exists
+		if _, err := os.Stat(sidecarScript); err != nil {
+			logger.Error("sidecar script not found", "path", sidecarScript, "error", err)
+			os.Exit(1)
+		}
+		logger.Info("sidecar script resolved", "path", sidecarScript)
+	}
+
 	// Create worker runner
 	runner := orchestrator.NewRunner(orchestrator.WorkerDeps{
 		WorkspaceManager: wsMgr,
@@ -181,15 +199,10 @@ func main() {
 				Kind: cfg.Agent.Kind,
 				Cwd:  cwd,
 			}
-			// Set command based on agent kind
 			switch cfg.Agent.Kind {
 			case "claude_code":
-				acfg.Command = "bash"
-				cmd := cfg.Claude.SidecarCommand
-				if cmd == "" {
-					cmd = "tsx sidecar/claude/src/index.ts"
-				}
-				acfg.Args = []string{"-lc", cmd}
+				acfg.Command = "tsx"
+				acfg.Args = []string{sidecarScript}
 			case "opencode":
 				acfg.Command = "opencode"
 				acfg.Args = []string{"acp"}
@@ -392,6 +405,17 @@ func runDoctor(cfg *config.ServiceConfig, wsRoot, stateDir string) {
 			os.Exit(1)
 		}
 		fmt.Println("PASS: tsx found on PATH")
+		// Check sidecar script
+		sidecar := cfg.Claude.SidecarCommand
+		if sidecar == "" {
+			cwd, _ := os.Getwd()
+			sidecar = filepath.Join(cwd, "sidecar", "claude", "src", "index.ts")
+		}
+		if _, err := os.Stat(sidecar); err != nil {
+			fmt.Printf("FAIL: sidecar script not found: %s\n", sidecar)
+			os.Exit(1)
+		}
+		fmt.Printf("PASS: sidecar script found: %s\n", sidecar)
 	case "opencode":
 		if err := checkBinaryExists("opencode"); err != nil {
 			fmt.Printf("FAIL: opencode not found on PATH: %v\n", err)

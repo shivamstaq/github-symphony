@@ -214,14 +214,9 @@ func (a *SubprocessAdapter) handleCallbackRequest(msg *Message) {
 }
 
 func (a *SubprocessAdapter) drainStderr() {
-	buf := make([]byte, 4096)
-	for {
-		n, err := a.stderr.Read(buf)
-		if n > 0 {
-			slog.Debug("adapter stderr", "output", string(buf[:n]))
-		}
-		if err != nil {
-			return
-		}
+	data, err := io.ReadAll(a.stderr)
+	if len(data) > 0 {
+		slog.Warn("adapter stderr", "output", string(data))
 	}
+	_ = err
 }
