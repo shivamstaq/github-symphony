@@ -1,5 +1,5 @@
 # Stage 1: Build Go binary
-FROM golang:1.24 AS go-builder
+FROM golang:1.26 AS go-builder
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
