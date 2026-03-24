@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	ghub "github.com/shivamstaq/github-symphony/internal/github"
@@ -14,16 +15,19 @@ func TestWriteBack_CreatePR(t *testing.T) {
 	var receivedBody map[string]any
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		switch {
+		case r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/repos/org/repo/pulls"):
+			// No existing PRs
+			json.NewEncoder(w).Encode([]any{})
 		case r.Method == "POST" && r.URL.Path == "/repos/org/repo/pulls":
 			json.NewDecoder(r.Body).Decode(&receivedBody)
-			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]any{
-				"id":      1,
-				"number":  99,
+				"id":       1,
+				"number":   99,
 				"html_url": "https://github.com/org/repo/pull/99",
-				"state":   "open",
-				"draft":   true,
+				"state":    "open",
+				"draft":    true,
 			})
 		default:
 			w.WriteHeader(404)

@@ -53,6 +53,51 @@ func New(cfg OrchestratorConfig, source WorkItemSource, runner WorkerRunner) *Or
 	}
 }
 
+// Run starts the poll loop and blocks until ctx is cancelled.
+func (o *Orchestrator) Run(ctx context.Context) {
+	slog.Info("orchestrator starting poll loop", "interval_ms", o.cfg.PollIntervalMs)
+
+	// Immediate first tick
+	o.RunOnce(ctx)
+
+	ticker := time.NewTicker(time.Duration(o.cfg.PollIntervalMs) * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			slog.Info("orchestrator shutting down")
+			return
+		case result := <-o.results:
+			o.handleWorkerResult(result)
+		case <-ticker.C:
+			o.RunOnce(ctx)
+		}
+	}
+}
+
+// Shutdown gracefully stops all running workers.
+func (o *Orchestrator) Shutdown(ctx context.Context) {
+	o.mu.Lock()
+	running := make(map[string]*RunningEntry, len(o.state.Running))
+	for k, v := range o.state.Running {
+		running[k] = v
+	}
+	o.mu.Unlock()
+
+	slog.Info("shutting down orchestrator", "running_count", len(running))
+
+	// Process any remaining results
+	o.ProcessResults()
+}
+
+// SetPendingRefresh marks the orchestrator for an extra reconciliation pass.
+func (o *Orchestrator) SetPendingRefresh() {
+	o.mu.Lock()
+	o.state.PendingRefresh = true
+	o.mu.Unlock()
+}
+
 // RunOnce executes one poll-and-dispatch tick.
 func (o *Orchestrator) RunOnce(ctx context.Context) {
 	// 1. Process any pending worker results first

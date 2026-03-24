@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var sanitizeRe = regexp.MustCompile(`[^A-Za-z0-9._-]`)
@@ -67,6 +68,15 @@ type Workspace struct {
 	CreatedFromCache bool
 }
 
+// HooksConfig holds hook scripts for workspace lifecycle events.
+type HooksConfig struct {
+	AfterCreate  string
+	BeforeRun    string
+	AfterRun     string
+	BeforeRemove string
+	TimeoutMs    int
+}
+
 // ManagerConfig configures the workspace manager.
 type ManagerConfig struct {
 	WorktreeDir  string
@@ -74,6 +84,7 @@ type ManagerConfig struct {
 	BranchPrefix string
 	UseWorktrees bool
 	FetchDepth   int
+	Hooks        HooksConfig
 }
 
 // Manager handles workspace creation, reuse, and cleanup.
@@ -119,10 +130,31 @@ func (m *Manager) CreateForWorkItem(_ context.Context, ref WorkItemRef) (*Worksp
 		return nil, fmt.Errorf("workspace creation: mkdir repo cache dir: %w", err)
 	}
 
+	var ws *Workspace
+	var err error
 	if m.cfg.UseWorktrees {
-		return m.createWithWorktree(ref, key, branch, wsPath)
+		ws, err = m.createWithWorktree(ref, key, branch, wsPath)
+	} else {
+		ws, err = m.createWithClone(ref, key, branch, wsPath)
 	}
-	return m.createWithClone(ref, key, branch, wsPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Run after_create hook for newly created workspaces
+	if ws.CreatedNow && m.cfg.Hooks.AfterCreate != "" {
+		timeout := time.Duration(m.cfg.Hooks.TimeoutMs) * time.Millisecond
+		if timeout == 0 {
+			timeout = 60 * time.Second
+		}
+		if err := RunHook(context.Background(), "after_create", m.cfg.Hooks.AfterCreate, ws.Path, timeout); err != nil {
+			// after_create failure is fatal to workspace creation
+			_ = os.RemoveAll(wsPath)
+			return nil, fmt.Errorf("workspace creation: after_create hook: %w", err)
+		}
+	}
+
+	return ws, nil
 }
 
 func (m *Manager) createWithClone(ref WorkItemRef, key, branch, wsPath string) (*Workspace, error) {
@@ -208,6 +240,12 @@ func (m *Manager) runGit(dir string, args ...string) error {
 		return fmt.Errorf("git %s: %w\n%s", strings.Join(args, " "), err, string(out))
 	}
 	return nil
+}
+
+// PushBranch pushes the workspace branch to the remote.
+func (m *Manager) PushBranch(wsPath, remote, branch string) error {
+	slog.Info("pushing branch", "path", wsPath, "remote", remote, "branch", branch)
+	return m.runGit(wsPath, "push", "--set-upstream", remote, branch)
 }
 
 // RemoveWorkspace removes a workspace directory.

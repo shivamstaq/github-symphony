@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 )
@@ -15,6 +16,8 @@ type EligibilityConfig struct {
 	RepoDenylist        []string
 	RequiredLabels      []string
 	BlockedStatusValues []string
+	MaxPerStatus        map[string]int // max concurrent agents per project status
+	MaxPerRepo          map[string]int // max concurrent agents per repo (owner/name)
 }
 
 // IsEligible checks whether a work item should be dispatched.
@@ -89,6 +92,34 @@ func IsEligible(item WorkItem, cfg EligibilityConfig, state *State, maxConcurren
 	// Global concurrency
 	if len(state.Running) >= maxConcurrent {
 		return false, "no available slots"
+	}
+
+	// Per-status concurrency
+	if limit, ok := cfg.MaxPerStatus[strings.ToLower(item.ProjectStatus)]; ok {
+		count := 0
+		for _, entry := range state.Running {
+			if strings.EqualFold(entry.WorkItem.ProjectStatus, item.ProjectStatus) {
+				count++
+			}
+		}
+		if count >= limit {
+			return false, fmt.Sprintf("per-status limit reached for %q (%d/%d)", item.ProjectStatus, count, limit)
+		}
+	}
+
+	// Per-repo concurrency
+	if item.Repository != nil {
+		if limit, ok := cfg.MaxPerRepo[item.Repository.FullName]; ok {
+			count := 0
+			for _, entry := range state.Running {
+				if entry.WorkItem.Repository != nil && entry.WorkItem.Repository.FullName == item.Repository.FullName {
+					count++
+				}
+			}
+			if count >= limit {
+				return false, fmt.Sprintf("per-repo limit reached for %q (%d/%d)", item.Repository.FullName, count, limit)
+			}
+		}
 	}
 
 	// Blocker check: any non-terminal dependency blocks dispatch
