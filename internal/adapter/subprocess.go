@@ -41,6 +41,9 @@ func NewSubprocessAdapter(cfg SubprocessConfig) (*SubprocessAdapter, error) {
 		cmd.Env = append(os.Environ(), cfg.Env...)
 	}
 
+	// Set kill-on-parent-exit to prevent orphaned agent processes
+	setPdeathsig(cmd)
+
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, fmt.Errorf("adapter subprocess: stdin pipe: %w", err)
@@ -118,13 +121,17 @@ func (a *SubprocessAdapter) SendRequest(ctx context.Context, req Request) (*Mess
 			return msg, nil
 		}
 
-		// For requests from adapter (permission/tool/input), queue them
+		// For requests from adapter (permission/tool/input), auto-respond
 		if msg.IsRequest() {
+			// Forward to updates channel for observability
 			select {
 			case a.updates <- msg:
 			default:
 				slog.Warn("adapter update channel full, dropping request")
 			}
+
+			// Auto-respond to callback requests per harness policy
+			a.handleCallbackRequest(msg)
 			continue
 		}
 	}
@@ -150,6 +157,60 @@ func (a *SubprocessAdapter) PID() int {
 		return a.cmd.Process.Pid
 	}
 	return 0
+}
+
+// handleCallbackRequest auto-responds to adapter-to-client requests
+// (permission, tool, input) per configured harness policy.
+func (a *SubprocessAdapter) handleCallbackRequest(msg *Message) {
+	switch msg.Method {
+	case "session/request_permission":
+		// Auto-approve permissions
+		slog.Info("auto-approving permission request", "id", msg.ID)
+		resp := Request{
+			ID:     msg.ID,
+			Method: "session/respond_permission",
+			Params: map[string]any{
+				"approved": true,
+				"optionId": "allow-once",
+			},
+		}
+		a.mu.Lock()
+		_ = a.enc.Encode(resp)
+		a.mu.Unlock()
+
+	case "session/request_tool":
+		// Execute tool request — forward to updates for the orchestrator to handle
+		slog.Info("received tool request", "id", msg.ID)
+		// For now, return unsupported
+		resp := Request{
+			ID:     msg.ID,
+			Method: "session/respond_tool",
+			Params: map[string]any{
+				"success": false,
+				"error":   "unsupported tool",
+			},
+		}
+		a.mu.Lock()
+		_ = a.enc.Encode(resp)
+		a.mu.Unlock()
+
+	case "session/request_input":
+		// Deny input requests in automated mode
+		slog.Info("denying input request", "id", msg.ID)
+		resp := Request{
+			ID:     msg.ID,
+			Method: "session/respond_input",
+			Params: map[string]any{
+				"cancelled": true,
+			},
+		}
+		a.mu.Lock()
+		_ = a.enc.Encode(resp)
+		a.mu.Unlock()
+
+	default:
+		slog.Warn("unknown adapter request method", "method", msg.Method, "id", msg.ID)
+	}
 }
 
 func (a *SubprocessAdapter) drainStderr() {
