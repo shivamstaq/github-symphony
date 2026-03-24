@@ -281,6 +281,153 @@ func parsePageInfo(raw any) pageInfo {
 	return pi
 }
 
+// FetchIssueDetails fetches full details for a batch of issues (Pass 2).
+// Enriches the items with labels, description, assignees, linked PRs, etc.
+func (c *GraphQLClient) FetchIssueDetails(ctx context.Context, items []WorkItemRaw) ([]WorkItemRaw, error) {
+	for i, item := range items {
+		if item.IssueID == "" || item.ContentType != "issue" {
+			continue
+		}
+
+		query := `query($id: ID!) {
+		  node(id: $id) {
+		    ... on Issue {
+		      body
+		      url
+		      createdAt
+		      updatedAt
+		      milestone { title }
+		      assignees(first: 20) { nodes { login } }
+		      labels(first: 50) { nodes { name } }
+		      trackedInIssues(first: 20) {
+		        nodes { id number state repository { nameWithOwner } }
+		      }
+		      subIssues(first: 20) {
+		        nodes { id number state repository { nameWithOwner } }
+		      }
+		      closingIssuesReferences(first: 20) {
+		        nodes { id number state isDraft url repository { nameWithOwner } }
+		      }
+		    }
+		  }
+		}`
+
+		data, err := c.doGraphQL(ctx, query, map[string]any{"id": item.IssueID})
+		if err != nil {
+			// Non-fatal: continue with partial data
+			continue
+		}
+
+		node, ok := data["node"].(map[string]any)
+		if !ok {
+			continue
+		}
+
+		items[i].Description = getString(node, "body")
+		items[i].URL = getString(node, "url")
+		items[i].CreatedAt = getString(node, "createdAt")
+		items[i].UpdatedAt = getString(node, "updatedAt")
+
+		if ms, ok := node["milestone"].(map[string]any); ok {
+			items[i].Milestone = getString(ms, "title")
+		}
+
+		if assignees, ok := node["assignees"].(map[string]any); ok {
+			if nodes, ok := assignees["nodes"].([]any); ok {
+				for _, n := range nodes {
+					if a, ok := n.(map[string]any); ok {
+						items[i].Assignees = append(items[i].Assignees, getString(a, "login"))
+					}
+				}
+			}
+		}
+
+		if labels, ok := node["labels"].(map[string]any); ok {
+			if nodes, ok := labels["nodes"].([]any); ok {
+				for _, n := range nodes {
+					if l, ok := n.(map[string]any); ok {
+						items[i].Labels = append(items[i].Labels, strings.ToLower(getString(l, "name")))
+					}
+				}
+			}
+		}
+
+		// Blockers (trackedInIssues = issues that track this one as a dependency)
+		if tracked, ok := node["trackedInIssues"].(map[string]any); ok {
+			if nodes, ok := tracked["nodes"].([]any); ok {
+				for _, n := range nodes {
+					if b, ok := n.(map[string]any); ok {
+						ref := BlockerRefRaw{
+							ID:    getString(b, "id"),
+							State: strings.ToLower(getString(b, "state")),
+						}
+						if num, ok := b["number"].(float64); ok {
+							if repo, ok := b["repository"].(map[string]any); ok {
+								ref.Identifier = fmt.Sprintf("%s#%d", getString(repo, "nameWithOwner"), int(num))
+							}
+						}
+						items[i].BlockedBy = append(items[i].BlockedBy, ref)
+					}
+				}
+			}
+		}
+
+		// Sub-issues
+		if subIssues, ok := node["subIssues"].(map[string]any); ok {
+			if nodes, ok := subIssues["nodes"].([]any); ok {
+				for _, n := range nodes {
+					if s, ok := n.(map[string]any); ok {
+						ref := ChildRefRaw{
+							ID:    getString(s, "id"),
+							State: strings.ToLower(getString(s, "state")),
+						}
+						if num, ok := s["number"].(float64); ok {
+							if repo, ok := s["repository"].(map[string]any); ok {
+								ref.Identifier = fmt.Sprintf("%s#%d", getString(repo, "nameWithOwner"), int(num))
+							}
+						}
+						items[i].SubIssues = append(items[i].SubIssues, ref)
+					}
+				}
+			}
+		}
+
+		// Linked PRs (closingIssuesReferences)
+		if closing, ok := node["closingIssuesReferences"].(map[string]any); ok {
+			if nodes, ok := closing["nodes"].([]any); ok {
+				for _, n := range nodes {
+					if p, ok := n.(map[string]any); ok {
+						pr := PRRefRaw{
+							ID:      getString(p, "id"),
+							State:   strings.ToLower(getString(p, "state")),
+							IsDraft: getBool(p, "isDraft"),
+							URL:     getString(p, "url"),
+						}
+						if num, ok := p["number"].(float64); ok {
+							pr.Number = int(num)
+						}
+						items[i].LinkedPRs = append(items[i].LinkedPRs, pr)
+					}
+				}
+			}
+		}
+
+		// Derive clone URL if not set
+		if items[i].Repository != nil && items[i].Repository.CloneURLHTTPS == "" {
+			items[i].Repository.CloneURLHTTPS = fmt.Sprintf("https://github.com/%s.git", items[i].Repository.FullName)
+		}
+	}
+
+	return items, nil
+}
+
+func getBool(m map[string]any, key string) bool {
+	if v, ok := m[key].(bool); ok {
+		return v
+	}
+	return false
+}
+
 func getString(m map[string]any, key string) string {
 	if v, ok := m[key].(string); ok {
 		return v
