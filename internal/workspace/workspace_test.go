@@ -30,7 +30,8 @@ func TestSanitizeKey(t *testing.T) {
 			t.Errorf("SanitizeKey(%q) = %q, want %q", tt.input, got, tt.want)
 		}
 		for _, c := range got {
-			if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-') {
+			valid := (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-'
+			if !valid {
 				t.Errorf("SanitizeKey(%q) contains invalid char %q", tt.input, string(c))
 			}
 		}

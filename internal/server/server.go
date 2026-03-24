@@ -83,7 +83,7 @@ func (s *Server) buildRouter() {
 func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	if !s.provider.IsHealthy() {
 		w.WriteHeader(503)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"status": "unhealthy",
 		})
 		return
@@ -93,7 +93,7 @@ func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	uptime := time.Since(s.provider.StartedAt()).Seconds()
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"status":         "ok",
 		"uptime_seconds": int(uptime),
 		"auth_mode":      s.provider.AuthMode(),
@@ -126,7 +126,7 @@ func (s *Server) handleState(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"running":              running,
 		"retrying":             retrying,
 		"max_concurrent_agents": state.MaxConcurrentAgents,
@@ -148,7 +148,7 @@ func (s *Server) handleWorkItem(w http.ResponseWriter, r *http.Request) {
 
 	if entry, ok := state.Running[id]; ok {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"work_item_id": entry.WorkItem.WorkItemID,
 			"title":        entry.WorkItem.Title,
 			"state":        "running",
@@ -158,13 +158,13 @@ func (s *Server) handleWorkItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(404)
-	json.NewEncoder(w).Encode(map[string]any{"error": "work item not found"})
+	_ = json.NewEncoder(w).Encode(map[string]any{"error": "work item not found"})
 }
 
 func (s *Server) handleRefresh(w http.ResponseWriter, _ *http.Request) {
 	s.provider.TriggerRefresh()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
