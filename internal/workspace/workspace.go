@@ -256,3 +256,27 @@ func (m *Manager) RemoveWorkspace(wsPath string) error {
 	slog.Info("removing workspace", "path", wsPath)
 	return os.RemoveAll(wsPath)
 }
+
+// HasNewCommits returns true if the workspace branch has commits not on the base branch.
+func (m *Manager) HasNewCommits(wsPath, baseBranch string) bool {
+	// Check if there are commits on HEAD that aren't on the base branch
+	out, err := m.runGitOutput(wsPath, "rev-list", "--count", "HEAD", "--not", "origin/"+baseBranch)
+	if err != nil {
+		return false
+	}
+	count := strings.TrimSpace(out)
+	return count != "" && count != "0"
+}
+
+func (m *Manager) runGitOutput(dir string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("git %s: %w\n%s", strings.Join(args, " "), err, string(out))
+	}
+	return string(out), nil
+}

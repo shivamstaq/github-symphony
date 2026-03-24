@@ -174,8 +174,10 @@ func (r *Runner) Run(ctx context.Context, item WorkItem, attempt *int) WorkerRes
 	// 5. Close adapter session
 	_ = adapterClient.CloseSession(ctx, sessionID)
 
-	// 6. Write-back (if configured and agent completed work)
-	if r.deps.PullRequestCfg.OpenPROnSuccess && r.deps.WriteBack != nil && lastResult != nil && lastResult.StopReason == adapter.StopCompleted {
+	// 6. Write-back (if configured, agent completed, AND there are actual commits)
+	hasCommits := r.deps.WorkspaceManager.HasNewCommits(ws.Path, ws.BaseBranch)
+	if r.deps.PullRequestCfg.OpenPROnSuccess && r.deps.WriteBack != nil && lastResult != nil && lastResult.StopReason == adapter.StopCompleted && hasCommits {
+		logger.Info("new commits detected, performing write-back")
 		if err := r.performWriteBack(ctx, item, ws, logger); err != nil {
 			logger.Error("write-back failed", "error", err)
 			r.runAfterHook(ctx, ws.Path, hookTimeout)
