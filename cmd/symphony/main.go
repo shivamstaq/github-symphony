@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/shivamstaq/github-symphony/internal/adapter"
 	"github.com/shivamstaq/github-symphony/internal/config"
 	ghub "github.com/shivamstaq/github-symphony/internal/github"
@@ -23,6 +24,9 @@ import (
 )
 
 func main() {
+	// Load .env file if present (non-fatal if missing)
+	_ = godotenv.Load()
+
 	var (
 		port      int
 		logFormat string
