@@ -1,0 +1,34 @@
+# Go
+/bin/
+/symphony
+*.exe
+*.test
+*.out
+cover.out
+coverage.html
+
+# Node.js (sidecar)
+node_modules/
+sidecar/claude/dist/
+
+# Environment
+.env
+.env.local
+
+# State
+*.db
+.symphony/
+
+# Workspaces
+symphony_workspaces/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,31 @@
+---
+tracker:
+  kind: github
+  owner: shivamstaq
+  project_number: 1
+github:
+  token: $GITHUB_TOKEN
+agent:
+  kind: claude_code
+polling:
+  interval_ms: 30000
+pull_request:
+  open_pr_on_success: true
+  draft_by_default: true
+  handoff_project_status: Human Review
+---
+You are working on {{.work_item.issue_identifier}}: {{.work_item.title}}
+
+Repository: {{.repository.full_name}}
+Branch: {{.branch_name}} (based on {{.base_branch}})
+
+{{if .work_item.description}}
+## Issue Description
+{{.work_item.description}}
+{{end}}
+
+{{if .attempt}}
+This is retry attempt {{.attempt}}. Review previous work on the branch before continuing.
+{{end}}
+
+Fix the issue described above. Run tests before completing your work.
