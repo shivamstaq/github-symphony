@@ -317,11 +317,23 @@ func (r *Runner) performWriteBack(ctx context.Context, item WorkItem, ws *worksp
 	// Move project status to handoff value (best-effort)
 	cfg := r.deps.PullRequestCfg
 	if cfg.ProjectID != "" && cfg.StatusFieldID != "" && cfg.HandoffOptionID != "" {
+		logger.Info("updating project status",
+			"project_id", cfg.ProjectID,
+			"item_id", item.ProjectItemID,
+			"field_id", cfg.StatusFieldID,
+			"option_id", cfg.HandoffOptionID,
+		)
 		if err := r.deps.WriteBack.UpdateProjectField(ctx, cfg.ProjectID, item.ProjectItemID, cfg.StatusFieldID, cfg.HandoffOptionID); err != nil {
 			logger.Warn("project status update failed (non-fatal)", "error", err)
 		} else {
 			logger.Info("project status updated to handoff", "status", cfg.HandoffProjectStatus)
 		}
+	} else {
+		logger.Warn("project status update skipped (missing metadata)",
+			"project_id", cfg.ProjectID,
+			"field_id", cfg.StatusFieldID,
+			"option_id", cfg.HandoffOptionID,
+		)
 	}
 
 	return nil
