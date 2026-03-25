@@ -24,9 +24,10 @@ type OrchestratorConfig struct {
 	MaxConcurrentAgents int
 	StallTimeoutMs      int
 	MaxRetryBackoffMs   int
-	Eligibility         EligibilityConfig
-	ActiveValues        []string
-	TerminalValues      []string
+	Eligibility              EligibilityConfig
+	ActiveValues             []string
+	TerminalValues           []string
+	MaxContinuationRetries   int // hard limit on continuation retries per item (default: 10)
 }
 
 // Orchestrator owns the poll loop and all mutable scheduling state.
@@ -426,6 +427,23 @@ func (o *Orchestrator) handleWorkerResult(result WorkerResult) {
 		if entry != nil && entry.RetryAttempt != nil {
 			continuationAttempt = *entry.RetryAttempt + 1
 		}
+
+		// Hard limit on continuation retries to prevent infinite loops
+		maxCont := o.cfg.MaxContinuationRetries
+		if maxCont <= 0 {
+			maxCont = 10 // default
+		}
+		if continuationAttempt > maxCont {
+			slog.Warn("max continuation retries exceeded, releasing",
+				"work_item_id", result.WorkItemID,
+				"attempt", continuationAttempt,
+				"max", maxCont,
+			)
+			delete(o.state.Claimed, result.WorkItemID)
+			o.state.ErrorTotal++
+			break
+		}
+
 		o.state.RetryAttempts[result.WorkItemID] = &RetryEntry{
 			WorkItemID:      result.WorkItemID,
 			IssueIdentifier: issueIDFromEntry(entry),
@@ -435,6 +453,7 @@ func (o *Orchestrator) handleWorkerResult(result WorkerResult) {
 		slog.Info("work item normal exit, scheduling continuation",
 			"work_item_id", result.WorkItemID,
 			"attempt", continuationAttempt,
+			"max", maxCont,
 		)
 
 	case OutcomeFailure:

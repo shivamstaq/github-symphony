@@ -422,6 +422,73 @@ func (c *GraphQLClient) FetchIssueDetails(ctx context.Context, items []WorkItemR
 	return items, nil
 }
 
+// ProjectFieldMeta holds the IDs needed to update a project status field.
+type ProjectFieldMeta struct {
+	ProjectID string
+	FieldID   string
+	Options   map[string]string // option name → option ID
+}
+
+// FetchProjectFieldMeta fetches the project ID, status field ID, and option IDs.
+func (c *GraphQLClient) FetchProjectFieldMeta(ctx context.Context, owner string, projectNumber int, scope string, fieldName string) (*ProjectFieldMeta, error) {
+	ownerField := "organization"
+	if scope == "user" {
+		ownerField = "user"
+	}
+
+	query := fmt.Sprintf(`query {
+	  %s(login: %q) {
+	    projectV2(number: %d) {
+	      id
+	      field(name: %q) {
+	        ... on ProjectV2SingleSelectField {
+	          id
+	          options { id name }
+	        }
+	      }
+	    }
+	  }
+	}`, ownerField, owner, projectNumber, fieldName)
+
+	data, err := c.doGraphQL(ctx, query, nil)
+	if err != nil {
+		return nil, fmt.Errorf("fetch project field meta: %w", err)
+	}
+
+	ownerData, ok := data[ownerField].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("fetch project field meta: missing %s in response", ownerField)
+	}
+	project, ok := ownerData["projectV2"].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("fetch project field meta: missing projectV2")
+	}
+	field, ok := project["field"].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("fetch project field meta: field %q not found or not single-select", fieldName)
+	}
+
+	meta := &ProjectFieldMeta{
+		ProjectID: getString(project, "id"),
+		FieldID:   getString(field, "id"),
+		Options:   make(map[string]string),
+	}
+
+	if options, ok := field["options"].([]any); ok {
+		for _, opt := range options {
+			if o, ok := opt.(map[string]any); ok {
+				name := getString(o, "name")
+				id := getString(o, "id")
+				if name != "" && id != "" {
+					meta.Options[name] = id
+				}
+			}
+		}
+	}
+
+	return meta, nil
+}
+
 // ConvertDraftIssue converts a draft project item to a real issue.
 func (c *GraphQLClient) ConvertDraftIssue(ctx context.Context, itemID, repoID string) (string, error) {
 	query := `mutation($itemId: ID!, $repositoryId: ID!) {

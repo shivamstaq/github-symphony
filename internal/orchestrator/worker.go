@@ -204,15 +204,11 @@ func (r *Runner) Run(ctx context.Context, item WorkItem, attempt *int) WorkerRes
 			return WorkerResult{WorkItemID: item.WorkItemID, Outcome: OutcomeFailure, Error: err}
 		}
 
-		// Re-evaluate handoff after write-back
-		handoff := EvaluateHandoff(HandoffInput{
-			HasPR:                true,
-			CurrentProjectStatus: item.ProjectStatus,
-			HandoffProjectStatus: r.deps.PullRequestCfg.HandoffProjectStatus,
-		})
-		if handoff.IsHandoff {
-			handoffReached = true
-		}
+		// PR creation IS the handoff. The PR is the deliverable artifact.
+		// Don't wait for project status to match — move status ourselves (best-effort),
+		// but the handoff is unconditional on successful PR creation.
+		handoffReached = true
+		logger.Info("PR created/updated, marking as handed off")
 	}
 
 	// 7. Run after_run hook (best-effort)
@@ -262,13 +258,22 @@ func (r *Runner) performWriteBack(ctx context.Context, item WorkItem, ws *worksp
 	}
 	logger.Info("PR write-back", "action", action, "number", prResult.Number, "url", prResult.URL)
 
-	// Comment on issue
-	if r.deps.PullRequestCfg.CommentOnIssue && item.IssueNumber != nil {
-		body := fmt.Sprintf("Symphony %s PR: %s", action, prResult.URL)
+	// Comment on issue (only on first PR creation, not updates)
+	if r.deps.PullRequestCfg.CommentOnIssue && item.IssueNumber != nil && prResult.Created {
+		body := fmt.Sprintf("Symphony created PR: %s\n\n---\n🤖 *Automated by [Symphony](https://github.com/shivamstaq/github-symphony)*", prResult.URL)
 		_, err := r.deps.WriteBack.CommentOnIssue(ctx, item.Repository.Owner, item.Repository.Name, *item.IssueNumber, body)
 		if err != nil {
 			logger.Warn("issue comment failed", "error", err)
-			// Non-fatal
+		}
+	}
+
+	// Move project status to handoff value (best-effort)
+	cfg := r.deps.PullRequestCfg
+	if cfg.ProjectID != "" && cfg.StatusFieldID != "" && cfg.HandoffOptionID != "" {
+		if err := r.deps.WriteBack.UpdateProjectField(ctx, cfg.ProjectID, item.ProjectItemID, cfg.StatusFieldID, cfg.HandoffOptionID); err != nil {
+			logger.Warn("project status update failed (non-fatal)", "error", err)
+		} else {
+			logger.Info("project status updated to handoff", "status", cfg.HandoffProjectStatus)
 		}
 	}
 

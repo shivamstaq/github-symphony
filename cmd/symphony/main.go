@@ -145,6 +145,28 @@ func main() {
 	gqlClient := ghub.NewGraphQLClient(graphqlEndpoint, token)
 	writeBack := ghub.NewWriteBack(apiURL, token)
 
+	// Fetch project field metadata for status updates (best-effort)
+	var projectMeta *ghub.ProjectFieldMeta
+	if cfg.PullRequest.HandoffProjectStatus != "" {
+		meta, err := gqlClient.FetchProjectFieldMeta(
+			context.Background(),
+			cfg.Tracker.Owner,
+			cfg.Tracker.ProjectNumber,
+			cfg.Tracker.ProjectScope,
+			cfg.Tracker.StatusFieldName,
+		)
+		if err != nil {
+			logger.Warn("could not fetch project field metadata (status updates will be skipped)", "error", err)
+		} else {
+			projectMeta = meta
+			logger.Info("project metadata loaded",
+				"project_id", meta.ProjectID,
+				"field_id", meta.FieldID,
+				"options", len(meta.Options),
+			)
+		}
+	}
+
 	// Create GitHub source
 	ghSource := ghub.NewSource(gqlClient, ghub.SourceConfig{
 		Owner:            cfg.Tracker.Owner,
@@ -211,13 +233,8 @@ func main() {
 		HooksBefore:    cfg.Hooks.BeforeRun,
 		HooksAfter:     cfg.Hooks.AfterRun,
 		HooksTimeoutMs: cfg.Hooks.TimeoutMs,
-		PullRequestCfg: orchestrator.PullRequestConfig{
-			OpenPROnSuccess:      cfg.PullRequest.OpenPROnSuccess,
-			DraftByDefault:       cfg.PullRequest.DraftByDefault,
-			HandoffProjectStatus: cfg.PullRequest.HandoffProjectStatus,
-			CommentOnIssue:       cfg.PullRequest.CommentOnIssueWithPR,
-		},
-		GitToken: token,
+		PullRequestCfg: buildPRConfig(cfg, projectMeta),
+		GitToken:       token,
 	})
 
 	// Create orchestrator
@@ -457,6 +474,23 @@ func lookPath(name string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("%s not found in PATH", name)
+}
+
+func buildPRConfig(cfg *config.ServiceConfig, meta *ghub.ProjectFieldMeta) orchestrator.PullRequestConfig {
+	pc := orchestrator.PullRequestConfig{
+		OpenPROnSuccess:      cfg.PullRequest.OpenPROnSuccess,
+		DraftByDefault:       cfg.PullRequest.DraftByDefault,
+		HandoffProjectStatus: cfg.PullRequest.HandoffProjectStatus,
+		CommentOnIssue:       cfg.PullRequest.CommentOnIssueWithPR,
+	}
+	if meta != nil {
+		pc.ProjectID = meta.ProjectID
+		pc.StatusFieldID = meta.FieldID
+		if optID, ok := meta.Options[cfg.PullRequest.HandoffProjectStatus]; ok {
+			pc.HandoffOptionID = optID
+		}
+	}
+	return pc
 }
 
 func setupLogger(format, level string) *slog.Logger {
