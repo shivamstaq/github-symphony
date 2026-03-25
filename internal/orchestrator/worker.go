@@ -29,6 +29,7 @@ type WorkerDeps struct {
 	HooksTimeoutMs   int
 	PullRequestCfg   PullRequestConfig
 	GitToken         string // GitHub token for authenticated git operations (push)
+	EventBus         *EventBus
 }
 
 // PullRequestConfig for write-back decisions.
@@ -79,8 +80,10 @@ func (r *Runner) Run(ctx context.Context, item WorkItem, attempt *int) WorkerRes
 	})
 	if err != nil {
 		logger.Error("workspace creation failed", "error", err)
+		r.emitEvent(item, EventError, fmt.Sprintf("Workspace failed: %v", err))
 		return WorkerResult{WorkItemID: item.WorkItemID, Outcome: OutcomeFailure, Error: err}
 	}
+	r.emitEvent(item, EventWorkspaceCreated, fmt.Sprintf("Workspace ready: %s", ws.BranchName))
 
 	hookTimeout := time.Duration(r.deps.HooksTimeoutMs) * time.Millisecond
 	if hookTimeout == 0 {
@@ -155,6 +158,7 @@ func (r *Runner) Run(ctx context.Context, item WorkItem, attempt *int) WorkerRes
 		}
 
 		logger.Info("starting turn", "turn", turn, "max_turns", r.deps.MaxTurns)
+		r.emitEvent(item, EventTurnStarted, fmt.Sprintf("Turn %d/%d — Claude executing", turn, r.deps.MaxTurns))
 
 		// Build prompt
 		promptText, err := prompt.Render(r.deps.PromptTemplate, prompt.RenderInput{
@@ -182,6 +186,7 @@ func (r *Runner) Run(ctx context.Context, item WorkItem, attempt *int) WorkerRes
 
 		logger.Info("turn completed", "turn", turn, "stop_reason", lastResult.StopReason,
 			"cost_usd", lastResult.CostUSD, "claude_session", lastResult.SessionID)
+		r.emitEvent(item, EventTurnCompleted, fmt.Sprintf("Turn %d done — %s ($%.4f)", turn, lastResult.StopReason, lastResult.CostUSD))
 
 		// Persist Claude session ID for future resumption
 		if lastResult.SessionID != "" && r.deps.StateStore != nil {
@@ -241,11 +246,10 @@ func (r *Runner) Run(ctx context.Context, item WorkItem, attempt *int) WorkerRes
 			return WorkerResult{WorkItemID: item.WorkItemID, Outcome: OutcomeFailure, Error: err}
 		}
 
-		// PR creation IS the handoff. The PR is the deliverable artifact.
-		// Don't wait for project status to match — move status ourselves (best-effort),
-		// but the handoff is unconditional on successful PR creation.
+		// PR creation IS the handoff.
 		handoffReached = true
 		logger.Info("PR created/updated, marking as handed off")
+		r.emitEvent(item, EventHandoff, "PR created, handed off for review")
 	}
 
 	// 7. Run after_run hook (best-effort)
@@ -294,6 +298,7 @@ func (r *Runner) performWriteBack(ctx context.Context, item WorkItem, ws *worksp
 		action = "updated"
 	}
 	logger.Info("PR write-back", "action", action, "number", prResult.Number, "url", prResult.URL)
+	r.emitEvent(item, EventPRCreated, fmt.Sprintf("PR #%d %s → %s", prResult.Number, action, prResult.URL))
 
 	// Comment on issue (only on first PR creation, not updates)
 	if r.deps.PullRequestCfg.CommentOnIssue && item.IssueNumber != nil && prResult.Created {
@@ -349,6 +354,17 @@ func (r *Runner) generateClaudeMD(item WorkItem, ws *workspace.Workspace) {
 	claudePath := fmt.Sprintf("%s/CLAUDE.md", ws.Path)
 	if err := os.WriteFile(claudePath, []byte(content), 0644); err != nil {
 		slog.Warn("failed to write CLAUDE.md", "path", claudePath, "error", err)
+	}
+}
+
+func (r *Runner) emitEvent(item WorkItem, kind EventKind, message string) {
+	if r.deps.EventBus != nil {
+		r.deps.EventBus.Emit(Event{
+			WorkItemID: item.WorkItemID,
+			Issue:      item.IssueIdentifier,
+			Kind:       kind,
+			Message:    message,
+		})
 	}
 }
 

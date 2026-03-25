@@ -206,6 +206,9 @@ func main() {
 		},
 	})
 
+	// Create shared event bus for TUI + worker events
+	eventBus := orchestrator.NewEventBus(200)
+
 	// Create worker runner
 	runner := orchestrator.NewRunner(orchestrator.WorkerDeps{
 		WorkspaceManager: wsMgr,
@@ -247,6 +250,7 @@ func main() {
 		HooksTimeoutMs: cfg.Hooks.TimeoutMs,
 		PullRequestCfg: buildPRConfig(cfg, projectMeta),
 		GitToken:       token,
+		EventBus:       eventBus,
 	})
 
 	// Create orchestrator
@@ -268,6 +272,7 @@ func main() {
 		ActiveValues:   cfg.Tracker.ActiveValues,
 		TerminalValues: cfg.Tracker.TerminalValues,
 	}, sourceBridge, runner)
+	orch.Events = eventBus // share event bus between orchestrator and workers
 
 	// Restore persisted retries
 	retries, err := store.LoadRetries()
@@ -364,15 +369,31 @@ func main() {
 	go orch.Run(ctx)
 
 	// Start TUI if running interactively (terminal attached and not disabled)
-	if !noTUI && isTerminal() {
+	useTUI := !noTUI && isTerminal()
+	if useTUI {
+		// Redirect slog away from stderr — TUI owns the terminal.
+		// Logs go to: VictoriaLogs (if configured) + log file only.
+		logFile, err := os.CreateTemp("", "symphony-*.log")
+		if err == nil {
+			fileHandler := slog.NewJSONHandler(logFile, &slog.HandlerOptions{Level: logging.ParseLevel(logLevel)})
+			if logPusher != nil {
+				// File + VictoriaLogs (no stderr)
+				slog.SetDefault(slog.New(logging.NewLogPusherFromURL(fileHandler, victoriaLogsURL)))
+			} else {
+				slog.SetDefault(slog.New(fileHandler))
+			}
+			logger.Info("TUI active, logs redirected", "log_file", logFile.Name())
+			defer logFile.Close()
+		}
+
 		tuiModel := symphonyTUI.New(symphonyTUI.Config{
 			StateProvider: stateProvider,
-			EventBus:      orch.Events,
+			EventBus:      eventBus,
 			StartedAt:     startedAt,
 		})
 		p := tea.NewProgram(tuiModel, tea.WithAltScreen())
-		if _, err := p.Run(); err != nil {
-			logger.Error("TUI error", "error", err)
+		if _, tuiErr := p.Run(); tuiErr != nil {
+			fmt.Fprintf(os.Stderr, "TUI error: %v\n", tuiErr)
 		}
 		cancel() // TUI quit → cancel orchestrator
 	} else {
