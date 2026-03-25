@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/joho/godotenv"
 	"github.com/shivamstaq/github-symphony/internal/adapter"
 	"github.com/shivamstaq/github-symphony/internal/config"
@@ -20,6 +21,7 @@ import (
 	"github.com/shivamstaq/github-symphony/internal/orchestrator"
 	"github.com/shivamstaq/github-symphony/internal/server"
 	"github.com/shivamstaq/github-symphony/internal/state"
+	symphonyTUI "github.com/shivamstaq/github-symphony/internal/tui"
 	"github.com/shivamstaq/github-symphony/internal/webhook"
 	"github.com/shivamstaq/github-symphony/internal/workspace"
 )
@@ -284,14 +286,15 @@ func main() {
 
 	startedAt := time.Now()
 
+	stateProvider := &orchestratorStateProvider{
+		orch:      orch,
+		authMode:  cfg.GitHub.ResolvedAuthMode,
+		startedAt: startedAt,
+	}
+
 	// Start HTTP server if configured
 	logger.Debug("server port check", "port", cfg.Server.Port)
 	if cfg.Server.Port > 0 {
-		stateProvider := &orchestratorStateProvider{
-			orch:      orch,
-			authMode:  cfg.GitHub.ResolvedAuthMode,
-			startedAt: startedAt,
-		}
 
 		srv := server.New(server.Config{
 			Port:           cfg.Server.Port,
@@ -346,8 +349,25 @@ func main() {
 		os.Exit(1)
 	}()
 
-	// Run orchestrator (blocks until ctx is cancelled)
-	orch.Run(ctx)
+	// Run orchestrator in background
+	go orch.Run(ctx)
+
+	// Start TUI if running interactively (terminal attached)
+	if isTerminal() {
+		tuiModel := symphonyTUI.New(symphonyTUI.Config{
+			StateProvider: stateProvider,
+			EventBus:      orch.Events,
+			StartedAt:     startedAt,
+		})
+		p := tea.NewProgram(tuiModel, tea.WithAltScreen())
+		if _, err := p.Run(); err != nil {
+			logger.Error("TUI error", "error", err)
+		}
+		cancel() // TUI quit → cancel orchestrator
+	} else {
+		// Non-interactive: block until signal
+		<-ctx.Done()
+	}
 
 	// Graceful shutdown
 	logger.Info("shutting down...")
@@ -473,6 +493,14 @@ func lookPath(name string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("%s not found in PATH", name)
+}
+
+func isTerminal() bool {
+	fi, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
 }
 
 func buildPRConfig(cfg *config.ServiceConfig, meta *ghub.ProjectFieldMeta) orchestrator.PullRequestConfig {

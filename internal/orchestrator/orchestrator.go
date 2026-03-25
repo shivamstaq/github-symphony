@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -37,6 +38,7 @@ type Orchestrator struct {
 	runner  WorkerRunner
 	state   *State
 	results chan WorkerResult
+	Events  *EventBus
 	mu      sync.RWMutex
 }
 
@@ -49,6 +51,7 @@ func New(cfg OrchestratorConfig, source WorkItemSource, runner WorkerRunner) *Or
 		cfg:    cfg,
 		source: source,
 		runner: runner,
+		Events: NewEventBus(200),
 		state: &State{
 			PollIntervalMs:      cfg.PollIntervalMs,
 			MaxConcurrentAgents: cfg.MaxConcurrentAgents,
@@ -380,6 +383,13 @@ func (o *Orchestrator) dispatch(ctx context.Context, item WorkItem, attempt *int
 		"attempt", attempt,
 	)
 
+	o.Events.Emit(Event{
+		WorkItemID: item.WorkItemID,
+		Issue:      item.IssueIdentifier,
+		Kind:       EventDispatched,
+		Message:    fmt.Sprintf("Dispatched to %s", repoFullName(item.Repository)),
+	})
+
 	go func() {
 		result := o.runner.Run(workerCtx, item, attempt)
 		o.results <- result
@@ -420,6 +430,7 @@ func (o *Orchestrator) handleWorkerResult(result WorkerResult) {
 		delete(o.state.Claimed, result.WorkItemID)
 		o.state.HandoffTotal++
 		slog.Info("work item handed off", "work_item_id", result.WorkItemID)
+		o.Events.Emit(Event{WorkItemID: result.WorkItemID, Issue: issueIDFromEntry(entry), Kind: EventHandoff, Message: "PR created, handed off for review"})
 
 	case OutcomeNormal:
 		o.state.Completed[result.WorkItemID] = true
