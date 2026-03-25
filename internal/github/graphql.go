@@ -307,9 +307,6 @@ func (c *GraphQLClient) FetchIssueDetails(ctx context.Context, items []WorkItemR
 		      subIssues(first: 50) {
 		        nodes { id number state repository { nameWithOwner } }
 		      }
-		      closingIssuesReferences(first: 20) {
-		        nodes { id number state isDraft url repository { nameWithOwner } }
-		      }
 		    }
 		  }
 		}`
@@ -391,26 +388,6 @@ func (c *GraphQLClient) FetchIssueDetails(ctx context.Context, items []WorkItemR
 							}
 						}
 						items[i].SubIssues = append(items[i].SubIssues, ref)
-					}
-				}
-			}
-		}
-
-		// Linked PRs (closingIssuesReferences)
-		if closing, ok := node["closingIssuesReferences"].(map[string]any); ok {
-			if nodes, ok := closing["nodes"].([]any); ok {
-				for _, n := range nodes {
-					if p, ok := n.(map[string]any); ok {
-						pr := PRRefRaw{
-							ID:      getString(p, "id"),
-							State:   strings.ToLower(getString(p, "state")),
-							IsDraft: getBool(p, "isDraft"),
-							URL:     getString(p, "url"),
-						}
-						if num, ok := p["number"].(float64); ok {
-							pr.Number = int(num)
-						}
-						items[i].LinkedPRs = append(items[i].LinkedPRs, pr)
 					}
 				}
 			}
