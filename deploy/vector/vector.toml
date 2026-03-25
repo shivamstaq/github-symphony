@@ -1,0 +1,20 @@
+# Vector configuration for collecting Symphony logs and forwarding to VictoriaLogs
+
+[sources.symphony_logs]
+type = "docker_logs"
+docker_host = "unix:///var/run/docker.sock"
+include_containers = ["symphony"]
+
+[transforms.parse_json]
+type = "remap"
+inputs = ["symphony_logs"]
+source = '''
+. = parse_json!(.message)
+.source = "symphony"
+'''
+
+[sinks.victorialogs]
+type = "http"
+inputs = ["parse_json"]
+uri = "http://victorialogs:9428/insert/jsonline?_stream_fields=source,level&_msg_field=msg&_time_field=time"
+encoding.codec = "json"

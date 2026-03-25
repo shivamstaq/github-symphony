@@ -8,7 +8,7 @@ services:
       - state:/app/.symphony
     ports:
       - "9097:9097"
-    command: ["--port", "9097", "--state-dir", "/app/.symphony"]
+    command: ["--port", "9097", "--state-dir", "/app/.symphony", "--log-format", "json", "--no-tui"]
     restart: unless-stopped
     depends_on:
       - victoriametrics
@@ -25,6 +25,27 @@ services:
       - -retentionPeriod=30d
     restart: unless-stopped
 
+  victorialogs:
+    image: victoriametrics/victoria-logs:latest
+    ports:
+      - "9428:9428"
+    volumes:
+      - vl-data:/vlogs
+    command:
+      - -storageDataPath=/vlogs
+      - -retentionPeriod=30d
+    restart: unless-stopped
+
+  vector:
+    image: timberio/vector:latest-alpine
+    volumes:
+      - ./deploy/vector/vector.toml:/etc/vector/vector.toml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - victorialogs
+      - symphony
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana:latest
     ports:
@@ -36,12 +57,15 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=victoriametrics-logs-datasource
     restart: unless-stopped
     depends_on:
       - victoriametrics
+      - victorialogs
 
 volumes:
   workspaces:
   state:
   vm-data:
+  vl-data:
   grafana-data:

@@ -36,10 +36,12 @@ func main() {
 		logLevel  string
 		stateDir  string
 		doctor    bool
+		noTUI     bool
 	)
 
 	flag.IntVar(&port, "port", 0, "HTTP server port (overrides server.port)")
 	flag.StringVar(&logFormat, "log-format", "text", "Log output format: text, json")
+	flag.BoolVar(&noTUI, "no-tui", false, "Disable TUI, use plain log output (for CI/Docker)")
 	flag.StringVar(&logLevel, "log-level", "info", "Log level: debug, info, warn, error")
 	flag.StringVar(&stateDir, "state-dir", "", "Directory for persistent state")
 	flag.BoolVar(&doctor, "doctor", false, "Validate config and environment, then exit")
@@ -352,8 +354,8 @@ func main() {
 	// Run orchestrator in background
 	go orch.Run(ctx)
 
-	// Start TUI if running interactively (terminal attached)
-	if isTerminal() {
+	// Start TUI if running interactively (terminal attached and not disabled)
+	if !noTUI && isTerminal() {
 		tuiModel := symphonyTUI.New(symphonyTUI.Config{
 			StateProvider: stateProvider,
 			EventBus:      orch.Events,
