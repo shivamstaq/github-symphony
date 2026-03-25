@@ -122,6 +122,12 @@ func (r *Runner) Run(ctx context.Context, item WorkItem, attempt *int) WorkerRes
 	handoffReached := false
 
 	for turn := 1; turn <= r.deps.MaxTurns; turn++ {
+		// Check for context cancellation (e.g., SIGTERM shutdown)
+		if ctx.Err() != nil {
+			logger.Info("context cancelled, stopping worker")
+			break
+		}
+
 		logger.Info("starting turn", "turn", turn, "max_turns", r.deps.MaxTurns)
 
 		// Build prompt
@@ -149,6 +155,12 @@ func (r *Runner) Run(ctx context.Context, item WorkItem, attempt *int) WorkerRes
 		}
 
 		logger.Info("turn completed", "turn", turn, "stop_reason", lastResult.StopReason)
+
+		// If prompt failed, don't continue to next turn
+		if lastResult.StopReason == adapter.StopFailed {
+			logger.Warn("prompt failed, stopping turns", "turn", turn)
+			break
+		}
 
 		// Re-check work item state between turns
 		if r.deps.Source != nil && turn < r.deps.MaxTurns {

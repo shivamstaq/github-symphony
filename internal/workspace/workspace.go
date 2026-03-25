@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -89,12 +90,23 @@ type ManagerConfig struct {
 
 // Manager handles workspace creation, reuse, and cleanup.
 type Manager struct {
-	cfg ManagerConfig
+	cfg     ManagerConfig
+	cloneMu sync.Mutex // serializes bare repo cache clones
 }
 
 // NewManager creates a workspace manager.
 func NewManager(cfg ManagerConfig) *Manager {
 	return &Manager{cfg: cfg}
+}
+
+// sanitizeURL removes tokens from URLs for safe logging.
+func sanitizeURL(url string) string {
+	if i := strings.Index(url, "@"); i > 0 {
+		if j := strings.Index(url, "://"); j >= 0 {
+			return url[:j+3] + "***@" + url[i+1:]
+		}
+	}
+	return url
 }
 
 // CreateForWorkItem creates or reuses a workspace for the given work item.
@@ -191,10 +203,12 @@ func (m *Manager) createWithClone(ref WorkItemRef, key, branch, wsPath string) (
 func (m *Manager) createWithWorktree(ref WorkItemRef, key, branch, wsPath string) (*Workspace, error) {
 	cachePath := filepath.Join(m.cfg.RepoCacheDir, SanitizeKey(ref.Owner), SanitizeKey(ref.Repo))
 
-	// Ensure repo cache exists
+	// Ensure repo cache exists (mutex prevents concurrent clones to same path)
+	m.cloneMu.Lock()
 	if _, err := os.Stat(filepath.Join(cachePath, "HEAD")); os.IsNotExist(err) {
-		slog.Info("cloning repo cache", "url", ref.CloneURL, "path", cachePath)
+		slog.Info("cloning repo cache", "url", sanitizeURL(ref.CloneURL), "path", cachePath)
 		if err := os.MkdirAll(filepath.Dir(cachePath), 0755); err != nil {
+			m.cloneMu.Unlock()
 			return nil, fmt.Errorf("workspace creation: mkdir cache: %w", err)
 		}
 		args := []string{"clone", "--bare"}
@@ -203,6 +217,7 @@ func (m *Manager) createWithWorktree(ref WorkItemRef, key, branch, wsPath string
 		}
 		args = append(args, ref.CloneURL, cachePath)
 		if err := m.runGit("", args...); err != nil {
+			m.cloneMu.Unlock()
 			return nil, fmt.Errorf("workspace creation: clone cache: %w", err)
 		}
 		// Configure fetch refspec so remote tracking branches work
@@ -213,6 +228,7 @@ func (m *Manager) createWithWorktree(ref WorkItemRef, key, branch, wsPath string
 		slog.Info("fetching repo cache", "path", cachePath)
 		m.gitFetch(cachePath)
 	}
+	m.cloneMu.Unlock()
 
 	// Create worktree
 	slog.Info("creating worktree", "cache", cachePath, "path", wsPath, "branch", branch)

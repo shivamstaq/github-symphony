@@ -140,6 +140,9 @@ func NormalizeWorkItem(raw WorkItemRaw, priorityMap map[string]int) NormalizedIt
 	for _, b := range raw.BlockedBy {
 		item.BlockedBy = append(item.BlockedBy, NormalizedBlocker(b))
 	}
+	if len(raw.BlockedBy) > 0 {
+		slog.Debug("normalized blockers", "work_item_id", item.WorkItemID, "blocked_by_count", len(raw.BlockedBy))
+	}
 	for _, s := range raw.SubIssues {
 		item.SubIssues = append(item.SubIssues, NormalizedChild(s))
 	}

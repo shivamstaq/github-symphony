@@ -82,7 +82,7 @@ func TestWorker_BasicRun_CompletesNormally(t *testing.T) {
 		WorkspaceManager: mgr,
 		AdapterFactory: func(cwd string) (adapter.AdapterClient, error) {
 			return adapter.NewAdapter(adapter.AdapterConfig{
-				Kind:    "claude_code",
+				Kind:    "opencode",
 				Command: "bash",
 				Args:    []string{"-c", workerMockAgent},
 				Cwd:     cwd,
@@ -134,7 +134,7 @@ func TestWorker_MaxTurns_Enforced(t *testing.T) {
 		WorkspaceManager: mgr,
 		AdapterFactory: func(cwd string) (adapter.AdapterClient, error) {
 			return adapter.NewAdapter(adapter.AdapterConfig{
-				Kind:    "claude_code",
+				Kind:    "opencode", // use generic subprocess adapter for testing
 				Command: "bash",
 				Args:    []string{"-c", workerMockAgent},
 				Cwd:     cwd,
