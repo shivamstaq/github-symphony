@@ -250,6 +250,11 @@ func (r *Runner) Run(ctx context.Context, item WorkItem, attempt *int) WorkerRes
 		handoffReached = true
 		logger.Info("PR created/updated, marking as handed off")
 		r.emitEvent(item, EventHandoff, "PR created, handed off for review")
+
+		// Persist handoff to bbolt so it survives restarts
+		if r.deps.StateStore != nil {
+			_ = r.deps.StateStore.SaveHandoff(item.WorkItemID)
+		}
 	}
 
 	// 7. Run after_run hook (best-effort)

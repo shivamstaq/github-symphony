@@ -293,6 +293,19 @@ func main() {
 		}
 	}
 
+	// Restore handed-off items
+	handoffs, err := store.LoadHandoffs()
+	if err != nil {
+		logger.Warn("failed to load persisted handoffs", "error", err)
+	} else {
+		for _, id := range handoffs {
+			orch.RestoreHandoff(id)
+		}
+		if len(handoffs) > 0 {
+			logger.Info("restored persisted handoffs", "count", len(handoffs))
+		}
+	}
+
 	// Restore totals
 	totals, err := store.LoadTotals()
 	if err != nil {

@@ -9,10 +9,11 @@ import (
 )
 
 var (
-	bucketRetries  = []byte("retries")
-	bucketTotals   = []byte("totals")
-	bucketSessions = []byte("sessions")
-	keyTotals      = []byte("agent_totals")
+	bucketRetries   = []byte("retries")
+	bucketTotals    = []byte("totals")
+	bucketSessions  = []byte("sessions")
+	bucketHandedOff = []byte("handedoff")
+	keyTotals       = []byte("agent_totals")
 )
 
 // RetryRecord is a persistent retry entry.
@@ -56,6 +57,9 @@ func Open(path string) (*Store, error) {
 			return err
 		}
 		if _, err := tx.CreateBucketIfNotExists(bucketSessions); err != nil {
+			return err
+		}
+		if _, err := tx.CreateBucketIfNotExists(bucketHandedOff); err != nil {
 			return err
 		}
 		return nil
@@ -172,4 +176,23 @@ func (s *Store) LoadSessions() ([]SessionRecord, error) {
 		})
 	})
 	return records, err
+}
+
+// SaveHandoff persists a handed-off work item ID.
+func (s *Store) SaveHandoff(workItemID string) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket(bucketHandedOff).Put([]byte(workItemID), []byte("1"))
+	})
+}
+
+// LoadHandoffs returns all persisted handed-off work item IDs.
+func (s *Store) LoadHandoffs() ([]string, error) {
+	var ids []string
+	err := s.db.View(func(tx *bolt.Tx) error {
+		return tx.Bucket(bucketHandedOff).ForEach(func(k, _ []byte) error {
+			ids = append(ids, string(k))
+			return nil
+		})
+	})
+	return ids, err
 }

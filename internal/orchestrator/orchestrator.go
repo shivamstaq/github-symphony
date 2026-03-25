@@ -149,6 +149,16 @@ func (o *Orchestrator) RestoreRetry(entry RetryEntry) {
 	o.state.Claimed[entry.WorkItemID] = true
 }
 
+// RestoreHandoff marks an item as handed off (from bbolt on startup).
+func (o *Orchestrator) RestoreHandoff(workItemID string) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.state.HandedOff == nil {
+		o.state.HandedOff = make(map[string]bool)
+	}
+	o.state.HandedOff[workItemID] = true
+}
+
 // RunOnce executes one poll-and-dispatch tick per spec Section 8.1:
 // 1. Reconcile running work items
 // 2. Fire due retries

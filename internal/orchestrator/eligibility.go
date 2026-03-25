@@ -86,12 +86,15 @@ func IsEligible(item WorkItem, cfg EligibilityConfig, state *State, maxConcurren
 		}
 	}
 
-	// Not already claimed or running
+	// Not already claimed, running, or handed off
 	if state.Claimed[item.WorkItemID] {
 		return false, "already claimed"
 	}
 	if _, running := state.Running[item.WorkItemID]; running {
 		return false, "already running"
+	}
+	if state.HandedOff != nil && state.HandedOff[item.WorkItemID] {
+		return false, "already handed off (PR created)"
 	}
 
 	// Global concurrency
