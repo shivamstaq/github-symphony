@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/shivamstaq/github-symphony/internal/adapter"
 	ghub "github.com/shivamstaq/github-symphony/internal/github"
 	"github.com/shivamstaq/github-symphony/internal/prompt"
+	"github.com/shivamstaq/github-symphony/internal/state"
 	"github.com/shivamstaq/github-symphony/internal/workspace"
 )
 
@@ -19,6 +21,7 @@ type WorkerDeps struct {
 	AdapterFactory   func(cwd string) (adapter.AdapterClient, error)
 	Source           WorkItemSource
 	WriteBack        *ghub.WriteBack
+	StateStore       *state.Store
 	PromptTemplate   string
 	MaxTurns         int
 	HooksBefore      string
@@ -113,9 +116,26 @@ func (r *Runner) Run(ctx context.Context, item WorkItem, attempt *int) WorkerRes
 		return WorkerResult{WorkItemID: item.WorkItemID, Outcome: OutcomeFailure, Error: err}
 	}
 
+	// Load previous session ID for resumption (continuation turns keep Claude's memory)
+	var resumeID string
+	if r.deps.StateStore != nil && attempt != nil && *attempt > 0 {
+		sessions, _ := r.deps.StateStore.LoadSessions()
+		for _, s := range sessions {
+			if s.WorkItemID == item.WorkItemID && s.SessionID != "" {
+				resumeID = s.SessionID
+				logger.Info("resuming previous Claude session", "resume_id", resumeID)
+				break
+			}
+		}
+	}
+
+	// Generate CLAUDE.md in workspace with issue context
+	r.generateClaudeMD(item, ws)
+
 	sessionID, err := adapterClient.NewSession(ctx, adapter.SessionParams{
-		Cwd:   ws.Path,
-		Title: fmt.Sprintf("%s: %s", item.IssueIdentifier, item.Title),
+		Cwd:             ws.Path,
+		Title:           fmt.Sprintf("%s: %s", item.IssueIdentifier, item.Title),
+		ResumeSessionID: resumeID,
 	})
 	if err != nil {
 		logger.Error("session creation failed", "error", err)
@@ -160,7 +180,18 @@ func (r *Runner) Run(ctx context.Context, item WorkItem, attempt *int) WorkerRes
 			return WorkerResult{WorkItemID: item.WorkItemID, Outcome: OutcomeFailure, Error: err}
 		}
 
-		logger.Info("turn completed", "turn", turn, "stop_reason", lastResult.StopReason)
+		logger.Info("turn completed", "turn", turn, "stop_reason", lastResult.StopReason,
+			"cost_usd", lastResult.CostUSD, "claude_session", lastResult.SessionID)
+
+		// Persist Claude session ID for future resumption
+		if lastResult.SessionID != "" && r.deps.StateStore != nil {
+			_ = r.deps.StateStore.SaveSession(state.SessionRecord{
+				WorkItemID:  item.WorkItemID,
+				SessionID:   lastResult.SessionID,
+				AdapterKind: "claude_code",
+				LastStatus:  string(lastResult.StopReason),
+			})
+		}
 
 		// If prompt failed, don't continue to next turn
 		if lastResult.StopReason == adapter.StopFailed {
@@ -284,6 +315,41 @@ func (r *Runner) performWriteBack(ctx context.Context, item WorkItem, ws *worksp
 	}
 
 	return nil
+}
+
+// generateClaudeMD creates a CLAUDE.md file in the workspace with issue context.
+// Claude Code reads CLAUDE.md automatically on every invocation, providing
+// persistent context across sessions without needing --resume.
+func (r *Runner) generateClaudeMD(item WorkItem, ws *workspace.Workspace) {
+	content := fmt.Sprintf(`# Symphony Agent Context
+
+## Work Item
+- **Issue**: %s — %s
+- **Repository**: %s
+- **Branch**: %s (based on %s)
+- **Status**: %s
+
+## Instructions
+- You are working on the issue described above
+- Make changes, commit them with descriptive messages
+- Do NOT push directly — Symphony handles git push and PR creation
+- Use gh CLI (GITHUB_TOKEN is in your environment) to post workpad comments on the issue
+- Before creating a workpad comment, check if one already exists
+`,
+		item.IssueIdentifier, item.Title,
+		item.Repository.FullName,
+		ws.BranchName, ws.BaseBranch,
+		item.ProjectStatus,
+	)
+
+	if item.Description != "" {
+		content += fmt.Sprintf("\n## Issue Description\n\n%s\n", item.Description)
+	}
+
+	claudePath := fmt.Sprintf("%s/CLAUDE.md", ws.Path)
+	if err := os.WriteFile(claudePath, []byte(content), 0644); err != nil {
+		slog.Warn("failed to write CLAUDE.md", "path", claudePath, "error", err)
+	}
 }
 
 func (r *Runner) runAfterHook(ctx context.Context, wsPath string, timeout time.Duration) {

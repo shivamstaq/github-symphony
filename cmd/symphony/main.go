@@ -226,6 +226,7 @@ func main() {
 		},
 		Source:         sourceBridge,
 		WriteBack:      writeBack,
+		StateStore:     store,
 		PromptTemplate: wf.PromptTemplate,
 		MaxTurns:       cfg.Agent.MaxTurns,
 		HooksBefore:    cfg.Hooks.BeforeRun,

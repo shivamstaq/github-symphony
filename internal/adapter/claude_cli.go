@@ -24,6 +24,7 @@ type ClaudeCLI struct {
 	tools    []string
 	permMode string
 	cwd      string // workspace directory
+	resumeID string // Claude session ID to resume from
 	mu       sync.Mutex
 	proc     *os.Process // current running process for cancellation
 	updates  chan *Message
@@ -83,19 +84,34 @@ func (c *ClaudeCLI) Initialize(_ context.Context) (*InitResult, error) {
 	slog.Info("claude CLI adapter initialized", "binary", path)
 	return &InitResult{
 		Provider:     "claude_code",
-		Capabilities: map[string]any{"sessionReuse": false, "tokenUsage": true},
+		Capabilities: map[string]any{"sessionReuse": true, "tokenUsage": true},
 	}, nil
 }
 
 func (c *ClaudeCLI) NewSession(_ context.Context, params SessionParams) (string, error) {
-	// CLI mode doesn't have persistent sessions — return a UUID for tracking
 	id := uuid.New().String()
-	slog.Info("claude CLI session created", "session_id", id, "cwd", params.Cwd)
+	// Store resume session ID for use in Prompt()
+	if params.ResumeSessionID != "" {
+		c.mu.Lock()
+		c.resumeID = params.ResumeSessionID
+		c.mu.Unlock()
+		slog.Info("claude CLI session created (resuming)", "session_id", id, "resume_from", params.ResumeSessionID, "cwd", params.Cwd)
+	} else {
+		slog.Info("claude CLI session created", "session_id", id, "cwd", params.Cwd)
+	}
 	return id, nil
 }
 
 func (c *ClaudeCLI) Prompt(ctx context.Context, sessionID string, text string) (*PromptResult, error) {
 	args := []string{"-p", "--output-format", "json"}
+
+	// Resume previous session if available (gives Claude memory across turns)
+	c.mu.Lock()
+	resumeFrom := c.resumeID
+	c.mu.Unlock()
+	if resumeFrom != "" {
+		args = append(args, "--resume", resumeFrom)
+	}
 
 	if c.permMode != "" {
 		args = append(args, "--permission-mode", c.permMode)
@@ -188,12 +204,23 @@ func (c *ClaudeCLI) Prompt(ctx context.Context, sessionID string, text string) (
 		"is_error", result.IsError,
 	)
 
+	// Store session ID for future resumption
+	if result.SessionID != "" {
+		c.mu.Lock()
+		c.resumeID = result.SessionID
+		c.mu.Unlock()
+	}
+
 	// Map stop reason
 	stopReason := mapCLIStopReason(result)
 
 	return &PromptResult{
 		StopReason: stopReason,
 		Summary:    truncate(result.Result, 500),
+		SessionID:  result.SessionID,
+		CostUSD:    result.TotalCostUSD,
+		NumTurns:   result.NumTurns,
+		DurationMs: result.DurationMs,
 	}, nil
 }
 

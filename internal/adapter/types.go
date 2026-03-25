@@ -22,18 +22,23 @@ type InitResult struct {
 
 // SessionParams for creating a new session.
 type SessionParams struct {
-	Cwd            string
-	Title          string
-	Model          string
-	Tools          []any
-	MCPServers     []any
-	ProviderParams map[string]any
+	Cwd              string
+	Title            string
+	Model            string
+	Tools            []any
+	MCPServers       []any
+	ProviderParams   map[string]any
+	ResumeSessionID  string // Resume a previous Claude session (for continuation turns)
 }
 
 // PromptResult holds the result of a prompt turn.
 type PromptResult struct {
-	StopReason StopReason
-	Summary    string
+	StopReason  StopReason
+	Summary     string
+	SessionID   string  // Claude session ID for resumption
+	CostUSD     float64 // Cost of this turn
+	NumTurns    int     // Internal turns Claude took
+	DurationMs  int     // Wall-clock duration
 }
 
 // AdapterConfig holds configuration for creating an adapter.
