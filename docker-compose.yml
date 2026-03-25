@@ -1,18 +1,16 @@
-services:
-  symphony:
-    build: .
-    env_file: .env
-    volumes:
-      - ./WORKFLOW.md:/app/WORKFLOW.md:ro
-      - workspaces:/app/workspaces
-      - state:/app/.symphony
-    ports:
-      - "9097:9097"
-    command: ["--port", "9097", "--state-dir", "/app/.symphony", "--log-format", "json", "--no-tui"]
-    restart: unless-stopped
-    depends_on:
-      - victoriametrics
+# Observability stack for Symphony development.
+# Symphony runs natively on your machine — this provides metrics + logs + dashboards.
+#
+# Usage:
+#   docker compose up -d
+#   symphony WORKFLOW.md    # runs natively, connects to these services
+#
+# Services:
+#   VictoriaMetrics  http://localhost:8428  — scrapes Symphony /metrics
+#   VictoriaLogs     http://localhost:9428  — receives log push from Symphony
+#   Grafana          http://localhost:3097  — dashboards (admin/admin)
 
+services:
   victoriametrics:
     image: victoriametrics/victoria-metrics:latest
     ports:
@@ -20,6 +18,8 @@ services:
     volumes:
       - vm-data:/storage
       - ./deploy/victoriametrics/scrape.yml:/etc/prometheus/scrape.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command:
       - -promscrape.config=/etc/prometheus/scrape.yml
       - -retentionPeriod=30d
@@ -34,16 +34,6 @@ services:
     command:
       - -storageDataPath=/vlogs
       - -retentionPeriod=30d
-    restart: unless-stopped
-
-  vector:
-    image: timberio/vector:latest-alpine
-    volumes:
-      - ./deploy/vector/vector.toml:/etc/vector/vector.toml:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    depends_on:
-      - victorialogs
-      - symphony
     restart: unless-stopped
 
   grafana:
@@ -64,8 +54,6 @@ services:
       - victorialogs
 
 volumes:
-  workspaces:
-  state:
   vm-data:
   vl-data:
   grafana-data:

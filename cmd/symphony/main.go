@@ -18,6 +18,7 @@ import (
 	"github.com/shivamstaq/github-symphony/internal/adapter"
 	"github.com/shivamstaq/github-symphony/internal/config"
 	ghub "github.com/shivamstaq/github-symphony/internal/github"
+	"github.com/shivamstaq/github-symphony/internal/logging"
 	"github.com/shivamstaq/github-symphony/internal/orchestrator"
 	"github.com/shivamstaq/github-symphony/internal/server"
 	"github.com/shivamstaq/github-symphony/internal/state"
@@ -31,23 +32,33 @@ func main() {
 	_ = godotenv.Load()
 
 	var (
-		port      int
-		logFormat string
-		logLevel  string
-		stateDir  string
-		doctor    bool
-		noTUI     bool
+		port            int
+		logFormat       string
+		logLevel        string
+		stateDir        string
+		doctor          bool
+		noTUI           bool
+		victoriaLogsURL string
 	)
 
-	flag.IntVar(&port, "port", 0, "HTTP server port (overrides server.port)")
+	flag.IntVar(&port, "port", 9097, "HTTP server port (0 to disable)")
 	flag.StringVar(&logFormat, "log-format", "text", "Log output format: text, json")
 	flag.BoolVar(&noTUI, "no-tui", false, "Disable TUI, use plain log output (for CI/Docker)")
 	flag.StringVar(&logLevel, "log-level", "info", "Log level: debug, info, warn, error")
 	flag.StringVar(&stateDir, "state-dir", "", "Directory for persistent state")
 	flag.BoolVar(&doctor, "doctor", false, "Validate config and environment, then exit")
+	flag.StringVar(&victoriaLogsURL, "victorialogs-url", "http://localhost:9428", "VictoriaLogs URL for log push (empty to disable)")
 	flag.Parse()
 
 	logger := setupLogger(logFormat, logLevel)
+
+	// Wrap logger with VictoriaLogs pusher if configured
+	var logPusher *logging.LogPusher
+	if victoriaLogsURL != "" {
+		logPusher = logging.NewLogPusherFromURL(logger.Handler(), victoriaLogsURL)
+		logger = slog.New(logPusher)
+	}
+
 	slog.SetDefault(logger)
 
 	// Resolve workflow path
@@ -72,10 +83,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Apply CLI overrides
-	if port > 0 {
-		cfg.Server.Port = port
-	}
+	// Apply CLI overrides (port default is 9097; use --port 0 to disable HTTP server)
+	cfg.Server.Port = port
 
 	// Validate
 	if err := config.ValidateForDispatch(cfg); err != nil {
@@ -393,6 +402,11 @@ func main() {
 	}
 
 	logger.Info("symphony stopped")
+
+	// Flush log pusher
+	if logPusher != nil {
+		logPusher.Close()
+	}
 }
 
 // orchestratorStateProvider bridges the orchestrator to the server's StateProvider interface.
