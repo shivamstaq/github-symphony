@@ -175,6 +175,10 @@ func (m *Manager) createWithClone(ref WorkItemRef, key, branch, wsPath string) (
 		return nil, fmt.Errorf("workspace creation: checkout branch: %w", err)
 	}
 
+	// Set git author for Symphony-authored commits
+	_ = m.runGit(wsPath, "config", "user.name", "Symphony")
+	_ = m.runGit(wsPath, "config", "user.email", "symphony@noreply.github.com")
+
 	return &Workspace{
 		Path:         wsPath,
 		WorkspaceKey: key,
@@ -201,6 +205,10 @@ func (m *Manager) createWithWorktree(ref WorkItemRef, key, branch, wsPath string
 		if err := m.runGit("", args...); err != nil {
 			return nil, fmt.Errorf("workspace creation: clone cache: %w", err)
 		}
+		// Configure fetch refspec so remote tracking branches work
+		_ = m.runGit(cachePath, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
+		// Fetch to populate remote tracking refs (e.g., origin/master)
+		m.gitFetch(cachePath)
 	} else {
 		slog.Info("fetching repo cache", "path", cachePath)
 		m.gitFetch(cachePath)
@@ -211,6 +219,10 @@ func (m *Manager) createWithWorktree(ref WorkItemRef, key, branch, wsPath string
 	if err := m.runGit(cachePath, "worktree", "add", "-B", branch, wsPath, ref.BaseBranch); err != nil {
 		return nil, fmt.Errorf("workspace creation: worktree add: %w", err)
 	}
+
+	// Set git author for Symphony-authored commits
+	_ = m.runGit(wsPath, "config", "user.name", "Symphony")
+	_ = m.runGit(wsPath, "config", "user.email", "symphony@noreply.github.com")
 
 	return &Workspace{
 		Path:           wsPath,
@@ -259,8 +271,8 @@ func (m *Manager) RemoveWorkspace(wsPath string) error {
 
 // HasNewCommits returns true if the workspace branch has commits not on the base branch.
 func (m *Manager) HasNewCommits(wsPath, baseBranch string) bool {
-	// Check if there are commits on HEAD that aren't on the base branch
-	out, err := m.runGitOutput(wsPath, "rev-list", "--count", "HEAD", "--not", "origin/"+baseBranch)
+	// Compare HEAD against the base branch (local ref, works in both clone and worktree mode)
+	out, err := m.runGitOutput(wsPath, "rev-list", "--count", baseBranch+"..HEAD")
 	if err != nil {
 		return false
 	}

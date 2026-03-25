@@ -78,16 +78,26 @@ Follow these steps in order. Do not skip steps.
 2. If the issue references specific files, read them first.
 3. Identify what needs to change and what the acceptance criteria are.
 
-### Step 1: Create Workpad
+### Step 1: Check for Existing Workpad
 
-Post a comment on the issue to serve as your persistent working document.
-Use `gh` CLI to post the comment (GITHUB_TOKEN is available in your environment):
+**ALWAYS check first** whether a workpad comment already exists on this issue before creating one:
 
 ```bash
-gh issue comment {{.work_item.issue_identifier}} --repo {{.repository.full_name}} --body "## Symphony Workpad
+gh issue view {{.work_item.issue_number}} --repo {{.repository.full_name}} --comments 2>/dev/null | grep -q "Symphony Workpad"
+```
+
+- If a workpad already exists: **read it** and continue from where you left off. Do NOT create a duplicate.
+- If no workpad exists: create one using the command below.
+
+{{if .attempt}}**This is continuation attempt {{.attempt}}.** A workpad likely already exists — find it and update it.{{end}}
+
+Only if no workpad exists, create one:
+
+```bash
+gh issue comment {{.work_item.issue_number}} --repo {{.repository.full_name}} --body "## Symphony Workpad
 
 **Branch**: \`{{.branch_name}}\`
-**Status**: Planning
+**Status**: In Progress
 
 ### Plan
 - [ ] (fill in your implementation plan)
@@ -97,16 +107,11 @@ gh issue comment {{.work_item.issue_identifier}} --repo {{.repository.full_name}
 
 ### Progress
 - Started at $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+---
+🤖 *Automated by [Symphony](https://github.com/shivamstaq/github-symphony)*
 "
 ```
-
-{{if .attempt}}
-**This is retry attempt {{.attempt}}.** Before creating a new workpad, check if one already exists:
-```bash
-gh issue view {{.work_item.issue_identifier}} --repo {{.repository.full_name}} --comments | grep "Symphony Workpad"
-```
-If a workpad exists, read it and continue from where you left off. Update the existing workpad comment instead of creating a new one.
-{{end}}
 
 ### Step 2: Implement
 

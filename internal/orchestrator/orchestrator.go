@@ -422,13 +422,20 @@ func (o *Orchestrator) handleWorkerResult(result WorkerResult) {
 
 	case OutcomeNormal:
 		o.state.Completed[result.WorkItemID] = true
+		continuationAttempt := 1
+		if entry != nil && entry.RetryAttempt != nil {
+			continuationAttempt = *entry.RetryAttempt + 1
+		}
 		o.state.RetryAttempts[result.WorkItemID] = &RetryEntry{
 			WorkItemID:      result.WorkItemID,
 			IssueIdentifier: issueIDFromEntry(entry),
-			Attempt:         1,
+			Attempt:         continuationAttempt,
 			DueAt:           time.Now().Add(1000 * time.Millisecond),
 		}
-		slog.Info("work item normal exit, scheduling continuation", "work_item_id", result.WorkItemID)
+		slog.Info("work item normal exit, scheduling continuation",
+			"work_item_id", result.WorkItemID,
+			"attempt", continuationAttempt,
+		)
 
 	case OutcomeFailure:
 		attempt := 1

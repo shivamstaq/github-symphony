@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/shivamstaq/github-symphony/internal/adapter"
@@ -24,6 +25,7 @@ type WorkerDeps struct {
 	HooksAfter       string
 	HooksTimeoutMs   int
 	PullRequestCfg   PullRequestConfig
+	GitToken         string // GitHub token for authenticated git operations (push)
 }
 
 // PullRequestConfig for write-back decisions.
@@ -59,11 +61,17 @@ func (r *Runner) Run(ctx context.Context, item WorkItem, attempt *int) WorkerRes
 	)
 
 	// 1. Create/reuse workspace
+	// Inject auth token into clone URL for push access
+	cloneURL := item.Repository.CloneURLHTTPS
+	if r.deps.GitToken != "" && strings.HasPrefix(cloneURL, "https://") {
+		cloneURL = strings.Replace(cloneURL, "https://", "https://x-access-token:"+r.deps.GitToken+"@", 1)
+	}
+
 	ws, err := r.deps.WorkspaceManager.CreateForWorkItem(ctx, workspace.WorkItemRef{
 		Owner:       item.Repository.Owner,
 		Repo:        item.Repository.Name,
 		IssueNumber: ptrVal(item.IssueNumber),
-		CloneURL:    item.Repository.CloneURLHTTPS,
+		CloneURL:    cloneURL,
 		BaseBranch:  item.Repository.DefaultBranch,
 	})
 	if err != nil {
@@ -220,11 +228,14 @@ func (r *Runner) performWriteBack(ctx context.Context, item WorkItem, ws *worksp
 		baseBranch = "main"
 	}
 
+	prBody := fmt.Sprintf("Automated by Symphony for %s\n\nCloses %s\n\n---\n🤖 *Automated by [Symphony](https://github.com/shivamstaq/github-symphony)*",
+		item.IssueIdentifier, item.IssueIdentifier)
+
 	prResult, err := r.deps.WriteBack.UpsertPR(ctx, ghub.PRParams{
 		Owner:      item.Repository.Owner,
 		Repo:       item.Repository.Name,
 		Title:      item.Title,
-		Body:       fmt.Sprintf("Automated by Symphony for %s", item.IssueIdentifier),
+		Body:       prBody,
 		HeadBranch: ws.BranchName,
 		BaseBranch: baseBranch,
 		Draft:      r.deps.PullRequestCfg.DraftByDefault,

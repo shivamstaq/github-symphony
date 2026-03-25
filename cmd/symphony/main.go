@@ -217,6 +217,7 @@ func main() {
 			HandoffProjectStatus: cfg.PullRequest.HandoffProjectStatus,
 			CommentOnIssue:       cfg.PullRequest.CommentOnIssueWithPR,
 		},
+		GitToken: token,
 	})
 
 	// Create orchestrator
