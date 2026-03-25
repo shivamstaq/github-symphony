@@ -268,6 +268,22 @@ func ptrVal(p *int) int {
 }
 
 func workItemToMap(item WorkItem) map[string]any {
+	// Convert sub-issues to template-friendly maps
+	var subIssues []map[string]any
+	for _, s := range item.SubIssues {
+		subIssues = append(subIssues, map[string]any{
+			"id": s.ID, "identifier": s.Identifier, "state": s.State,
+		})
+	}
+
+	// Convert blockers to template-friendly maps
+	var blockedBy []map[string]any
+	for _, b := range item.BlockedBy {
+		blockedBy = append(blockedBy, map[string]any{
+			"id": b.ID, "identifier": b.Identifier, "state": b.State,
+		})
+	}
+
 	return map[string]any{
 		"work_item_id":      item.WorkItemID,
 		"project_item_id":   item.ProjectItemID,
@@ -283,6 +299,8 @@ func workItemToMap(item WorkItem) map[string]any {
 		"assignees":         item.Assignees,
 		"milestone":         item.Milestone,
 		"url":               item.URL,
+		"sub_issues":        subIssues,
+		"blocked_by":        blockedBy,
 	}
 }
 

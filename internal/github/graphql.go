@@ -166,6 +166,7 @@ func (c *GraphQLClient) doGraphQL(ctx context.Context, query string, variables m
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("GraphQL-Features", "sub_issues")
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -299,10 +300,10 @@ func (c *GraphQLClient) FetchIssueDetails(ctx context.Context, items []WorkItemR
 		      milestone { title }
 		      assignees(first: 20) { nodes { login } }
 		      labels(first: 50) { nodes { name } }
-		      trackedInIssues(first: 20) {
+		      blockedBy(first: 50) {
 		        nodes { id number state repository { nameWithOwner } }
 		      }
-		      subIssues(first: 20) {
+		      subIssues(first: 50) {
 		        nodes { id number state repository { nameWithOwner } }
 		      }
 		      closingIssuesReferences(first: 20) {
@@ -352,9 +353,9 @@ func (c *GraphQLClient) FetchIssueDetails(ctx context.Context, items []WorkItemR
 			}
 		}
 
-		// Blockers (trackedInIssues = issues that track this one as a dependency)
-		if tracked, ok := node["trackedInIssues"].(map[string]any); ok {
-			if nodes, ok := tracked["nodes"].([]any); ok {
+		// Blocking dependencies (issues that must close before this one can proceed)
+		if blocked, ok := node["blockedBy"].(map[string]any); ok {
+			if nodes, ok := blocked["nodes"].([]any); ok {
 				for _, n := range nodes {
 					if b, ok := n.(map[string]any); ok {
 						ref := BlockerRefRaw{

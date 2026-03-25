@@ -122,10 +122,18 @@ func IsEligible(item WorkItem, cfg EligibilityConfig, state *State, maxConcurren
 		}
 	}
 
-	// Blocker check: any non-terminal dependency blocks dispatch
+	// Blocker check: any non-terminal blocking dependency blocks dispatch
 	for _, b := range item.BlockedBy {
 		if b.State != "" && strings.ToLower(b.State) != "closed" {
 			return false, "blocked by " + b.Identifier + " (state: " + b.State + ")"
+		}
+	}
+
+	// Parent/sub-issue check: if this item has open sub-issues, skip it
+	// and let the sub-issues get dispatched instead
+	for _, child := range item.SubIssues {
+		if child.State != "" && strings.ToLower(child.State) != "closed" {
+			return false, "has open sub-issues (dispatch children instead): " + child.Identifier
 		}
 	}
 

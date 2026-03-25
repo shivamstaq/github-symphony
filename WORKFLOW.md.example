@@ -53,6 +53,15 @@ You are an autonomous coding agent working on a GitHub issue dispatched by Symph
 - **Project Status**: {{.work_item.project_status}}
 {{if .attempt}}- **Attempt**: {{.attempt}} (this is a retry — check the workpad for prior progress){{end}}
 
+{{if .work_item.sub_issues}}
+## Prior Sub-Issue Work
+
+This issue previously had sub-issues. Review what was completed:
+{{range .work_item.sub_issues}}- {{.identifier}} ({{.state}})
+{{end}}
+Continue with any remaining work, taking the completed sub-issue results into account.
+{{end}}
+
 {{if .work_item.description}}
 ## Issue Description
 
