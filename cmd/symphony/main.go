@@ -24,7 +24,7 @@ import (
 )
 
 func main() {
-	// Load .env file if present (non-fatal if missing)
+	// Load .env file from CWD
 	_ = godotenv.Load()
 
 	var (
