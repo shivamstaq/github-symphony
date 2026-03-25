@@ -50,7 +50,7 @@ func TestWriteBack_ReusesExistingPR(t *testing.T) {
 	}))
 	defer server.Close()
 
-	wb := ghub.NewWriteBack(server.URL, "ghp_test")
+	wb := ghub.NewWriteBack(server.URL, server.URL+"/graphql", "ghp_test")
 	result, err := wb.UpsertPR(context.Background(), ghub.PRParams{
 		Owner:      "org",
 		Repo:       "repo",
@@ -107,7 +107,7 @@ func TestWriteBack_CreatesNewPRWhenNoneExists(t *testing.T) {
 	}))
 	defer server.Close()
 
-	wb := ghub.NewWriteBack(server.URL, "ghp_test")
+	wb := ghub.NewWriteBack(server.URL, server.URL+"/graphql", "ghp_test")
 	result, err := wb.UpsertPR(context.Background(), ghub.PRParams{
 		Owner: "org", Repo: "repo", Title: "New PR",
 		HeadBranch: "symphony/org_repo_1", BaseBranch: "main", Draft: true,

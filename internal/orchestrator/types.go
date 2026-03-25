@@ -63,6 +63,7 @@ type WorkItem struct {
 	URL             string
 	CreatedAt       string
 	UpdatedAt       string
+	Pass2Failed     bool // true if dependency data is incomplete — do not dispatch
 }
 
 type BlockerRef struct {

@@ -270,6 +270,13 @@ func (m *Manager) runGit(dir string, args ...string) error {
 	return nil
 }
 
+// FetchOrigin fetches the latest from origin in the workspace.
+func (m *Manager) FetchOrigin(wsPath string) {
+	if err := m.runGit(wsPath, "fetch", "origin"); err != nil {
+		slog.Warn("workspace fetch origin failed", "path", wsPath, "error", err)
+	}
+}
+
 // PushBranch pushes the workspace branch to the remote.
 func (m *Manager) PushBranch(wsPath, remote, branch string) error {
 	slog.Info("pushing branch", "path", wsPath, "remote", remote, "branch", branch)

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -133,17 +134,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	apiURL := cfg.GitHub.APIURL
+	apiURL := strings.TrimSuffix(cfg.GitHub.APIURL, "/")
 	if apiURL == "" {
 		apiURL = "https://api.github.com"
 	}
-	graphqlEndpoint := apiURL
-	if apiURL == "https://api.github.com" {
-		graphqlEndpoint = "https://api.github.com/graphql"
-	}
+	graphqlEndpoint := apiURL + "/graphql"
 
 	gqlClient := ghub.NewGraphQLClient(graphqlEndpoint, token)
-	writeBack := ghub.NewWriteBack(apiURL, token)
+	writeBack := ghub.NewWriteBack(apiURL, graphqlEndpoint, token)
 
 	// Fetch project field metadata for status updates (best-effort)
 	var projectMeta *ghub.ProjectFieldMeta

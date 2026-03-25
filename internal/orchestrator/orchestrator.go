@@ -444,16 +444,21 @@ func (o *Orchestrator) handleWorkerResult(result WorkerResult) {
 			break
 		}
 
+		// Increase delay with each continuation to avoid rapid-fire re-invocations
+		// 1st: 5s, 2nd: 10s, 3rd: 20s, 4th+: 30s
+		contDelay := time.Duration(min(5000*(1<<(continuationAttempt-1)), 30000)) * time.Millisecond
+
 		o.state.RetryAttempts[result.WorkItemID] = &RetryEntry{
 			WorkItemID:      result.WorkItemID,
 			IssueIdentifier: issueIDFromEntry(entry),
 			Attempt:         continuationAttempt,
-			DueAt:           time.Now().Add(1000 * time.Millisecond),
+			DueAt:           time.Now().Add(contDelay),
 		}
 		slog.Info("work item normal exit, scheduling continuation",
 			"work_item_id", result.WorkItemID,
 			"attempt", continuationAttempt,
 			"max", maxCont,
+			"delay_ms", contDelay.Milliseconds(),
 		)
 
 	case OutcomeFailure:

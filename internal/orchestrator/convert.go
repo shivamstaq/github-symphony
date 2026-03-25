@@ -22,6 +22,7 @@ func ConvertNormalizedItem(n ghub.NormalizedItem) WorkItem {
 		URL:             n.URL,
 		CreatedAt:       n.CreatedAt,
 		UpdatedAt:       n.UpdatedAt,
+		Pass2Failed:     n.Pass2Failed,
 	}
 
 	if n.Repository != nil {

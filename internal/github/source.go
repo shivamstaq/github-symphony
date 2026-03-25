@@ -95,6 +95,7 @@ func NormalizeWorkItem(raw WorkItemRaw, priorityMap map[string]int) NormalizedIt
 		URL:           raw.URL,
 		CreatedAt:     raw.CreatedAt,
 		UpdatedAt:     raw.UpdatedAt,
+		Pass2Failed:   raw.Pass2Failed,
 	}
 
 	// Derive work_item_id
@@ -172,6 +173,7 @@ type NormalizedItem struct {
 	URL             string
 	CreatedAt       string
 	UpdatedAt       string
+	Pass2Failed     bool
 	Repository      *NormalizedRepo
 	BlockedBy       []NormalizedBlocker
 	SubIssues       []NormalizedChild

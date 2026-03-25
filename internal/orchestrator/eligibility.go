@@ -31,6 +31,11 @@ func IsEligible(item WorkItem, cfg EligibilityConfig, state *State, maxConcurren
 		return false, "missing title"
 	}
 
+	// Reject items with incomplete dependency data (Pass 2 failed)
+	if item.Pass2Failed {
+		return false, "incomplete data (dependency fetch failed) — will retry next poll"
+	}
+
 	// Content type must be executable
 	if !containsCI(cfg.ExecutableItemTypes, item.ContentType) {
 		return false, "content_type not executable: " + item.ContentType

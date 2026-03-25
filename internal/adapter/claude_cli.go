@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -111,6 +112,12 @@ func (c *ClaudeCLI) Prompt(ctx context.Context, sessionID string, text string) (
 	cmd.Stdin = strings.NewReader(text)
 	cmd.Env = os.Environ()
 
+	// Capture stdout via pipe so we can track the process for cancellation
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return &PromptResult{StopReason: StopFailed, Summary: fmt.Sprintf("stdout pipe: %v", err)}, nil
+	}
+
 	slog.Info("claude CLI executing",
 		"session_id", sessionID,
 		"model", c.model,
@@ -118,32 +125,43 @@ func (c *ClaudeCLI) Prompt(ctx context.Context, sessionID string, text string) (
 		"prompt_len", len(text),
 	)
 
-	// Track the process for cancellation
+	if err := cmd.Start(); err != nil {
+		return &PromptResult{StopReason: StopFailed, Summary: fmt.Sprintf("start: %v", err)}, nil
+	}
+
+	// Track the process for cancellation AFTER start
+	c.mu.Lock()
+	c.proc = cmd.Process
+	c.mu.Unlock()
+
+	// Read all output
+	output, readErr := io.ReadAll(stdout)
+
+	// Wait for process to finish
+	waitErr := cmd.Wait()
+
 	c.mu.Lock()
 	c.proc = nil
 	c.mu.Unlock()
 
-	// Capture stdout and stderr
-	output, err := cmd.Output()
+	if readErr != nil {
+		slog.Error("claude CLI read failed", "session_id", sessionID, "error", readErr)
+		return &PromptResult{StopReason: StopFailed, Summary: fmt.Sprintf("read: %v", readErr)}, nil
+	}
 
-	c.mu.Lock()
-	c.proc = nil
-	c.mu.Unlock()
-
-	if err != nil {
-		// Get stderr from the ExitError
+	if waitErr != nil {
 		var stderr string
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		if exitErr, ok := waitErr.(*exec.ExitError); ok {
 			stderr = string(exitErr.Stderr)
 		}
 		slog.Error("claude CLI failed",
 			"session_id", sessionID,
-			"error", err,
+			"error", waitErr,
 			"stderr", stderr,
 		)
 		return &PromptResult{
 			StopReason: StopFailed,
-			Summary:    fmt.Sprintf("claude CLI error: %v\n%s", err, stderr),
+			Summary:    fmt.Sprintf("claude CLI error: %v\n%s", waitErr, stderr),
 		}, nil
 	}
 

@@ -23,6 +23,7 @@ type WorkItemRaw struct {
 	URL           string
 	CreatedAt     string
 	UpdatedAt     string
+	Pass2Failed   bool // true if Pass 2 enrichment failed — dependency data may be incomplete
 }
 
 // BlockerRefRaw is a dependency/blocker reference from GitHub.

@@ -84,6 +84,12 @@ func (r *Runner) Run(ctx context.Context, item WorkItem, attempt *int) WorkerRes
 		hookTimeout = 60 * time.Second
 	}
 
+	// 1b. Refresh workspace on continuation retries (fetch latest from origin)
+	if attempt != nil && *attempt > 0 && !ws.CreatedNow {
+		logger.Info("continuation retry, fetching latest from origin")
+		r.deps.WorkspaceManager.FetchOrigin(ws.Path)
+	}
+
 	// 2. Run before_run hook
 	if r.deps.HooksBefore != "" {
 		if err := workspace.RunHook(ctx, "before_run", r.deps.HooksBefore, ws.Path, hookTimeout); err != nil {
@@ -317,7 +323,7 @@ func workItemToMap(item WorkItem) map[string]any {
 		"project_item_id":   item.ProjectItemID,
 		"content_type":      item.ContentType,
 		"issue_id":          item.IssueID,
-		"issue_number":      item.IssueNumber,
+		"issue_number":      ptrVal(item.IssueNumber),
 		"issue_identifier":  item.IssueIdentifier,
 		"title":             item.Title,
 		"description":       item.Description,

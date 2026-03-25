@@ -7,21 +7,25 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 )
 
 // WriteBack handles deterministic GitHub write-back operations.
 type WriteBack struct {
-	baseURL string
-	token   string
-	client  *http.Client
+	baseURL         string // REST API base (e.g., https://api.github.com)
+	graphqlEndpoint string // GraphQL endpoint (e.g., https://api.github.com/graphql)
+	token           string
+	client          *http.Client
 }
 
 // NewWriteBack creates a new write-back client.
-func NewWriteBack(baseURL, token string) *WriteBack {
+// graphqlEndpoint should be the full GraphQL URL (not derived from baseURL).
+func NewWriteBack(baseURL, graphqlEndpoint, token string) *WriteBack {
 	return &WriteBack{
-		baseURL: baseURL,
-		token:   token,
-		client:  &http.Client{},
+		baseURL:         strings.TrimSuffix(baseURL, "/"),
+		graphqlEndpoint: graphqlEndpoint,
+		token:           token,
+		client:          &http.Client{},
 	}
 }
 
@@ -252,8 +256,7 @@ func (wb *WriteBack) graphqlPost(ctx context.Context, query string, variables ma
 		return nil, err
 	}
 
-	// GraphQL endpoint is baseURL + /graphql (or baseURL itself if it's the graphql endpoint)
-	endpoint := wb.baseURL + "/graphql"
+	endpoint := wb.graphqlEndpoint
 	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, err

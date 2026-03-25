@@ -35,7 +35,7 @@ func TestWriteBack_CreatePR(t *testing.T) {
 	}))
 	defer server.Close()
 
-	wb := ghub.NewWriteBack(server.URL, "ghp_test")
+	wb := ghub.NewWriteBack(server.URL, server.URL+"/graphql", "ghp_test")
 
 	result, err := wb.UpsertPR(context.Background(), ghub.PRParams{
 		Owner:      "org",
@@ -75,7 +75,7 @@ func TestWriteBack_CommentOnIssue(t *testing.T) {
 	}))
 	defer server.Close()
 
-	wb := ghub.NewWriteBack(server.URL, "ghp_test")
+	wb := ghub.NewWriteBack(server.URL, server.URL+"/graphql", "ghp_test")
 
 	url, err := wb.CommentOnIssue(context.Background(), "org", "repo", 42, "PR created: https://github.com/org/repo/pull/99")
 	if err != nil {

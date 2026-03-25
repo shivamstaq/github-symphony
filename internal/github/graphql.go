@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 )
@@ -315,7 +316,9 @@ func (c *GraphQLClient) FetchIssueDetails(ctx context.Context, items []WorkItemR
 
 		data, err := c.doGraphQL(ctx, query, map[string]any{"id": item.IssueID})
 		if err != nil {
-			// Non-fatal: continue with partial data
+			// Mark item as having incomplete data — eligibility checker will skip it
+			items[i].Pass2Failed = true
+			slog.Warn("pass 2 fetch failed for item", "issue_id", item.IssueID, "error", err)
 			continue
 		}
 
