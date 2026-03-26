@@ -175,6 +175,21 @@ func main() {
 				"field_id", meta.FieldID,
 				"options", len(meta.Options),
 			)
+			// Verify the handoff status option exists
+			if _, ok := meta.Options[cfg.PullRequest.HandoffProjectStatus]; !ok {
+				available := make([]string, 0, len(meta.Options))
+				for name := range meta.Options {
+					available = append(available, name)
+				}
+				logger.Error("CRITICAL: handoff_project_status not found in project",
+					"configured", cfg.PullRequest.HandoffProjectStatus,
+					"available_options", available,
+				)
+				fmt.Fprintf(os.Stderr, "\n⚠️  WARNING: handoff_project_status %q does not exist on your GitHub Project.\n", cfg.PullRequest.HandoffProjectStatus)
+				fmt.Fprintf(os.Stderr, "   Available status options: %v\n", available)
+				fmt.Fprintf(os.Stderr, "   Symphony cannot move items to handoff status after PR creation.\n")
+				fmt.Fprintf(os.Stderr, "   Fix: add %q to your project's Status field, or change handoff_project_status in WORKFLOW.md\n\n", cfg.PullRequest.HandoffProjectStatus)
+			}
 		}
 	}
 
