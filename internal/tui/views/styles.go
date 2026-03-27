@@ -26,9 +26,6 @@ var (
 	errorStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("196"))
 
-	successStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("82"))
-
 	statusBarStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("241")).
 			BorderTop(true).

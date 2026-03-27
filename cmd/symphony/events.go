@@ -33,7 +33,7 @@ func runEvents(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("open events: %w (has Symphony run yet?)", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {

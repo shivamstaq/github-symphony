@@ -78,7 +78,7 @@ func (e *Engine) reconcileRunningItems(ctx context.Context) {
 			e.logger.Warn("item missing from tracker, cancelling", "item", entry.WorkItem.IssueIdentifier)
 			entry.CancelFunc()
 			delete(e.state.Running, itemID)
-			e.transition(itemID, domain.EventCancelled, nil)
+			_, _ = e.transition(itemID, domain.EventCancelled, nil)
 			continue
 		}
 
@@ -96,7 +96,7 @@ func (e *Engine) reconcileRunningItems(ctx context.Context) {
 			)
 			entry.CancelFunc()
 			delete(e.state.Running, itemID)
-			e.transition(itemID, domain.EventCancelled, nil)
+			_, _ = e.transition(itemID, domain.EventCancelled, nil)
 		}
 	}
 }

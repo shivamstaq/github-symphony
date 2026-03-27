@@ -56,7 +56,7 @@ func sendControl(action, itemID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to Symphony at %s: %w\nIs 'symphony run' active?", addr, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 	fmt.Println(string(body))

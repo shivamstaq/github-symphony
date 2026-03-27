@@ -496,13 +496,6 @@ func (c *GraphQLClient) ConvertDraftIssue(ctx context.Context, itemID, repoID st
 	return "", nil
 }
 
-func getBool(m map[string]any, key string) bool {
-	if v, ok := m[key].(bool); ok {
-		return v
-	}
-	return false
-}
-
 func getString(m map[string]any, key string) string {
 	if v, ok := m[key].(string); ok {
 		return v

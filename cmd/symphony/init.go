@@ -143,11 +143,11 @@ func addToGitignore(cwd string) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if len(content) > 0 && !strings.HasSuffix(string(content), "\n") {
-		f.WriteString("\n")
+		_, _ = f.WriteString("\n")
 	}
-	f.WriteString("\n# Symphony orchestrator state\n.symphony/\n")
+	_, _ = f.WriteString("\n# Symphony orchestrator state\n.symphony/\n")
 }
 
 func generateYAML(trackerKind, owner, projectNum, token, agentKind, maxConcurrent string) string {
@@ -156,10 +156,10 @@ func generateYAML(trackerKind, owner, projectNum, token, agentKind, maxConcurren
 	sb.WriteString("# Docs: https://github.com/shivamstaq/github-symphony\n\n")
 
 	sb.WriteString("tracker:\n")
-	sb.WriteString(fmt.Sprintf("  kind: %s\n", trackerKind))
+	fmt.Fprintf(&sb, "  kind: %s\n", trackerKind)
 	if trackerKind == "github" {
-		sb.WriteString(fmt.Sprintf("  owner: %s\n", owner))
-		sb.WriteString(fmt.Sprintf("  project_number: %s\n", projectNum))
+		fmt.Fprintf(&sb, "  owner: %s\n", owner)
+		fmt.Fprintf(&sb, "  project_number: %s\n", projectNum)
 		sb.WriteString("  active_values: [Todo, In Progress]\n")
 		sb.WriteString("  terminal_values: [Done, Closed, Cancelled]\n")
 	}
@@ -167,12 +167,12 @@ func generateYAML(trackerKind, owner, projectNum, token, agentKind, maxConcurren
 	sb.WriteString("\nauth:\n")
 	if trackerKind == "github" {
 		sb.WriteString("  github:\n")
-		sb.WriteString(fmt.Sprintf("    token: %s\n", token))
+		fmt.Fprintf(&sb, "    token: %s\n", token)
 	}
 
 	sb.WriteString("\nagent:\n")
-	sb.WriteString(fmt.Sprintf("  kind: %s\n", agentKind))
-	sb.WriteString(fmt.Sprintf("  max_concurrent: %s\n", maxConcurrent))
+	fmt.Fprintf(&sb, "  kind: %s\n", agentKind)
+	fmt.Fprintf(&sb, "  max_concurrent: %s\n", maxConcurrent)
 	sb.WriteString("  max_turns: 20\n")
 
 	if agentKind == "claude_code" {

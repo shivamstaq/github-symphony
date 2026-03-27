@@ -81,7 +81,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("setup logging: %w", err)
 	}
-	defer logFile.Close()
+	defer func() { _ = logFile.Close() }()
 	slog.SetDefault(logger)
 
 	// Setup event log
@@ -178,12 +178,12 @@ func runRun(cmd *cobra.Command, args []string) error {
 
 	// Open state store
 	storePath := filepath.Join(symphonyDir, "state", "symphony.db")
-	os.MkdirAll(filepath.Dir(storePath), 0755)
+	_ = os.MkdirAll(filepath.Dir(storePath), 0755)
 	store, err := state.Open(storePath)
 	if err != nil {
 		return fmt.Errorf("open state store: %w", err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	eng := engine.New(engine.Deps{
 		Config:       cfg,
@@ -224,7 +224,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 				logger.Error("HTTP server error", "error", err)
 			}
 		}()
-		defer httpServer.Close()
+		defer func() { _ = httpServer.Close() }()
 	}
 
 	// Run engine in background goroutine

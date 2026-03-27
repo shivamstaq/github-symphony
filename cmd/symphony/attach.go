@@ -37,7 +37,7 @@ func runAttach(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("connect to agent session: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	fmt.Fprintf(os.Stderr, "Attached to %s (Ctrl+C to detach)\n", itemID)
 
@@ -47,7 +47,7 @@ func runAttach(cmd *cobra.Command, args []string) error {
 	go func() {
 		<-sigCh
 		fmt.Fprintln(os.Stderr, "\nDetached.")
-		conn.Close()
+		_ = conn.Close()
 		os.Exit(0)
 	}()
 

@@ -97,7 +97,7 @@ func (e *Engine) performHandoff(itemID string, item domain.WorkItem, entry *Runn
 			}
 			if err := e.wsMgr.PushBranch(entry.WorkspacePath, pushRemote, branchName); err != nil {
 				e.logger.Error("branch push failed", "item", item.IssueIdentifier, "error", err)
-				e.transition(itemID, domain.EventError, nil)
+				_, _ = e.transition(itemID, domain.EventError, nil)
 				return
 			}
 		}
@@ -113,7 +113,7 @@ func (e *Engine) performHandoff(itemID string, item domain.WorkItem, entry *Runn
 		})
 		if err != nil {
 			e.logger.Error("PR creation failed", "item", item.IssueIdentifier, "error", err)
-			e.transition(itemID, domain.EventError, nil)
+			_, _ = e.transition(itemID, domain.EventError, nil)
 			return
 		}
 

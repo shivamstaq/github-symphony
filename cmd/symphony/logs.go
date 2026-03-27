@@ -41,7 +41,7 @@ func runLogs(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("open log file: %w (is Symphony initialized?)", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Read all lines
 	var lines []string

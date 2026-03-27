@@ -91,7 +91,7 @@ func (s *APIServer) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		fmt.Sprintf("symphony_sessions_started_total %d", state.Totals.SessionsStarted),
 		fmt.Sprintf("symphony_cost_usd_total %f", state.Totals.CostUSD),
 	}
-	fmt.Fprintln(w, strings.Join(lines, "\n"))
+	_, _ = fmt.Fprintln(w, strings.Join(lines, "\n"))
 }
 
 func (s *APIServer) handleGetState(w http.ResponseWriter, r *http.Request) {
@@ -205,5 +205,5 @@ func verifyHMAC(body []byte, signature, secret string) bool {
 
 func writeJSON(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+	_ = json.NewEncoder(w).Encode(data)
 }

@@ -61,7 +61,7 @@ func (c *Client) Query(ctx context.Context, query string, vars map[string]any, t
 	if err != nil {
 		return fmt.Errorf("linear API request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

@@ -2,7 +2,6 @@ package agent
 
 import (
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -55,16 +54,16 @@ func NewPTYSession(ptyFile *os.File, cfg PTYConfig) (*PTYSession, error) {
 	// Create Unix socket
 	socketDir := cfg.SocketDir
 	if err := os.MkdirAll(socketDir, 0755); err != nil {
-		logFile.Close()
+		_ = logFile.Close()
 		return nil, fmt.Errorf("create socket dir: %w", err)
 	}
 	socketPath := filepath.Join(socketDir, cfg.ItemID+".sock")
 	// Remove stale socket
-	os.Remove(socketPath)
+	_ = os.Remove(socketPath)
 
 	listener, err := net.Listen("unix", socketPath)
 	if err != nil {
-		logFile.Close()
+		_ = logFile.Close()
 		return nil, fmt.Errorf("listen unix socket: %w", err)
 	}
 
@@ -99,7 +98,7 @@ func (s *PTYSession) readLoop() {
 			data := buf[:n]
 
 			// Write to log file
-			s.logFile.Write(data)
+			_, _ = s.logFile.Write(data)
 
 			// Write to ring buffer
 			s.ringBuf.Write(data)
@@ -111,16 +110,13 @@ func (s *PTYSession) readLoop() {
 				if _, werr := c.Write(data); werr == nil {
 					alive = append(alive, c)
 				} else {
-					c.Close()
+					_ = c.Close()
 				}
 			}
 			s.clients = alive
 			s.mu.Unlock()
 		}
 		if err != nil {
-			if err != io.EOF {
-				// PTY closed or process exited
-			}
 			return
 		}
 	}
@@ -136,14 +132,14 @@ func (s *PTYSession) acceptLoop() {
 
 		s.mu.Lock()
 		if s.closed {
-			conn.Close()
+			_ = conn.Close()
 			s.mu.Unlock()
 			return
 		}
 		// Send ring buffer contents (recent history) to new client
 		recent := s.ringBuf.Bytes()
 		if len(recent) > 0 {
-			conn.Write(recent)
+			_, _ = conn.Write(recent)
 		}
 		s.clients = append(s.clients, conn)
 		s.mu.Unlock()
@@ -162,16 +158,16 @@ func (s *PTYSession) Close() error {
 
 	// Close attached clients
 	for _, c := range s.clients {
-		c.Close()
+		_ = c.Close()
 	}
 	s.clients = nil
 
 	// Close listener and remove socket file
-	s.listener.Close()
-	os.Remove(s.socketPath)
+	_ = s.listener.Close()
+	_ = os.Remove(s.socketPath)
 
 	// Close log file
-	s.logFile.Close()
+	_ = s.logFile.Close()
 
 	return nil
 }

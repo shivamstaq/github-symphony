@@ -10,8 +10,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/shivamstaq/github-symphony/internal/domain"
 	"github.com/shivamstaq/github-symphony/internal/engine"
 )
 
@@ -206,10 +204,10 @@ func readLogLines(m *Model) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if m.logOffset > 0 {
-		f.Seek(m.logOffset, 0)
+		_, _ = f.Seek(m.logOffset, 0)
 	}
 
 	scanner := bufio.NewScanner(f)
@@ -301,19 +299,19 @@ func (m Model) viewOverview() string {
 		b.WriteString("\n RETRY QUEUE\n")
 		for _, re := range m.state.RetryQueue {
 			dueIn := time.Until(re.DueAt).Truncate(time.Second)
-			b.WriteString(fmt.Sprintf("  %-30s due in %s (attempt %d)\n",
-				re.IssueIdentifier, dueIn, re.Attempt))
+			fmt.Fprintf(&b, "  %-30s due in %s (attempt %d)\n",
+				re.IssueIdentifier, dueIn, re.Attempt)
 		}
 	}
 
 	// Metrics
 	if m.state != nil {
-		b.WriteString(fmt.Sprintf("\n Dispatched: %d  Handed off: %d  Errors: %d  Tokens: %dk\n",
+		fmt.Fprintf(&b, "\n Dispatched: %d  Handed off: %d  Errors: %d  Tokens: %dk\n",
 			m.state.DispatchTotal,
 			m.state.HandoffTotal,
 			m.state.ErrorTotal,
 			m.state.Totals.TotalTokens/1000,
-		))
+		)
 	}
 
 	// Status bar
@@ -345,25 +343,25 @@ func (m Model) viewDetail() string {
 		phase = warnStyle.Render("PAUSED")
 	}
 
-	b.WriteString(fmt.Sprintf("  Title:     %s\n", entry.WorkItem.Title))
-	b.WriteString(fmt.Sprintf("  Phase:     %s\n", phase))
-	b.WriteString(fmt.Sprintf("  Elapsed:   %s\n", elapsed))
-	b.WriteString(fmt.Sprintf("  Turns:     %d\n", entry.TurnsCompleted))
-	b.WriteString(fmt.Sprintf("  Tokens:    %d (in: %d, out: %d)\n",
-		entry.TotalTokens, entry.InputTokens, entry.OutputTokens))
-	b.WriteString(fmt.Sprintf("  Cost:      $%.4f\n", entry.CostUSD))
-	b.WriteString(fmt.Sprintf("  Attempt:   %d\n", entry.RetryAttempt))
+	fmt.Fprintf(&b, "  Title:     %s\n", entry.WorkItem.Title)
+	fmt.Fprintf(&b, "  Phase:     %s\n", phase)
+	fmt.Fprintf(&b, "  Elapsed:   %s\n", elapsed)
+	fmt.Fprintf(&b, "  Turns:     %d\n", entry.TurnsCompleted)
+	fmt.Fprintf(&b, "  Tokens:    %d (in: %d, out: %d)\n",
+		entry.TotalTokens, entry.InputTokens, entry.OutputTokens)
+	fmt.Fprintf(&b, "  Cost:      $%.4f\n", entry.CostUSD)
+	fmt.Fprintf(&b, "  Attempt:   %d\n", entry.RetryAttempt)
 
 	if entry.WorkItem.Repository != nil {
-		b.WriteString(fmt.Sprintf("  Repo:      %s\n", entry.WorkItem.Repository.FullName))
+		fmt.Fprintf(&b, "  Repo:      %s\n", entry.WorkItem.Repository.FullName)
 	}
 
 	if entry.Session != nil && entry.Session.SocketPath != "" {
-		b.WriteString(fmt.Sprintf("  Socket:    %s\n", entry.Session.SocketPath))
+		fmt.Fprintf(&b, "  Socket:    %s\n", entry.Session.SocketPath)
 	}
 
-	b.WriteString(fmt.Sprintf("\n  Last activity: %s ago\n",
-		time.Since(entry.LastActivityAt).Truncate(time.Second)))
+	fmt.Fprintf(&b, "\n  Last activity: %s ago\n",
+		time.Since(entry.LastActivityAt).Truncate(time.Second))
 
 	b.WriteString("\n" + statusBarStyle.Render(" [q]back [p]ause [R]esume [K]ill"))
 
@@ -431,7 +429,3 @@ func max(a, b int) int {
 	return b
 }
 
-// Verify lipgloss import is used
-var _ = lipgloss.NewStyle
-// Verify domain import is used
-var _ domain.ItemState

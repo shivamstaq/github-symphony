@@ -82,7 +82,7 @@ func (a *Agent) Start(ctx context.Context, cfg agent.StartConfig) (*agent.Sessio
 		defer close(updates)
 		defer close(done)
 		if ptySess != nil {
-			defer ptySess.Close()
+			defer func() { _ = ptySess.Close() }()
 		}
 
 		updates <- agent.Update{

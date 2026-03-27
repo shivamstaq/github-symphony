@@ -165,7 +165,7 @@ func (e *Engine) handleEvent(ctx context.Context, evt EngineEvent) {
 
 // handleWorkspaceReady transitions an item from preparing to running.
 func (e *Engine) handleWorkspaceReady(evt EngineEvent) {
-	e.transition(evt.ItemID, domain.EventWorkspaceReady, nil)
+	_, _ = e.transition(evt.ItemID, domain.EventWorkspaceReady, nil)
 }
 
 // handlePollTick fetches candidates and dispatches eligible items.
@@ -258,7 +258,7 @@ func (e *Engine) dispatchItem(ctx context.Context, item domain.WorkItem) error {
 			e.logger.Error("workspace creation failed", "item", item.IssueIdentifier, "error", err)
 			delete(e.state.Running, item.WorkItemID)
 			cancel()
-			e.transition(item.WorkItemID, domain.EventError, nil)
+			_, _ = e.transition(item.WorkItemID, domain.EventError, nil)
 			return err
 		}
 		entry.WorkspacePath = ws.Path
@@ -266,7 +266,7 @@ func (e *Engine) dispatchItem(ctx context.Context, item domain.WorkItem) error {
 	}
 
 	// Transition to running
-	e.transition(item.WorkItemID, domain.EventWorkspaceReady, nil)
+	_, _ = e.transition(item.WorkItemID, domain.EventWorkspaceReady, nil)
 	entry.Phase = domain.StateRunning
 
 	go e.runWorker(workerCtx, item, entry)
@@ -429,7 +429,7 @@ func (e *Engine) handleAgentExited(evt EngineEvent) {
 
 	switch {
 	case result.StopReason == agent.StopCancelled:
-		e.transition(itemID, domain.EventCancelled, nil)
+		_, _ = e.transition(itemID, domain.EventCancelled, nil)
 
 	case result.StopReason == agent.StopFailed || result.Error != nil:
 		item := domain.WorkItem{}
@@ -442,7 +442,7 @@ func (e *Engine) handleAgentExited(evt EngineEvent) {
 
 	case result.HasCommits:
 		// FSM: running -> completed
-		e.transition(itemID, domain.EventAgentExitedCommits, nil)
+		_, _ = e.transition(itemID, domain.EventAgentExitedCommits, nil)
 		// Perform handoff (push branch, create PR, update status)
 		handoffItem := domain.WorkItem{}
 		if entry != nil {
@@ -452,7 +452,7 @@ func (e *Engine) handleAgentExited(evt EngineEvent) {
 
 	default:
 		// No commits — needs human intervention
-		e.transition(itemID, domain.EventAgentExitedEmpty, nil)
+		_, _ = e.transition(itemID, domain.EventAgentExitedEmpty, nil)
 	}
 }
 
@@ -480,14 +480,14 @@ func (e *Engine) handleAgentUpdate(evt EngineEvent) {
 func (e *Engine) handlePause(evt EngineEvent) {
 	if entry, ok := e.state.Running[evt.ItemID]; ok {
 		entry.Paused = true
-		e.transition(evt.ItemID, domain.EventPauseRequested, nil)
+		_, _ = e.transition(evt.ItemID, domain.EventPauseRequested, nil)
 		e.logger.Info("paused", "item", evt.ItemID)
 	}
 }
 
 // handleResume clears the pause flag.
 func (e *Engine) handleResume(evt EngineEvent) {
-	e.transition(evt.ItemID, domain.EventResume, nil)
+	_, _ = e.transition(evt.ItemID, domain.EventResume, nil)
 	if entry, ok := e.state.Running[evt.ItemID]; ok {
 		entry.Paused = false
 	}
@@ -500,7 +500,7 @@ func (e *Engine) handleCancel(evt EngineEvent) {
 		entry.CancelFunc()
 		delete(e.state.Running, evt.ItemID)
 	}
-	e.transition(evt.ItemID, domain.EventCancelled, nil)
+	_, _ = e.transition(evt.ItemID, domain.EventCancelled, nil)
 	e.logger.Info("cancelled", "item", evt.ItemID)
 }
 
@@ -514,13 +514,13 @@ func (e *Engine) handleShutdown() {
 	for id, entry := range e.state.Running {
 		e.logger.Info("cancelling worker", "item", entry.WorkItem.IssueIdentifier)
 		entry.CancelFunc()
-		e.transition(id, domain.EventCancelled, nil)
+		_, _ = e.transition(id, domain.EventCancelled, nil)
 	}
 
 	// Persist state before exit
 	e.persistState()
 	if e.eventLog != nil {
-		e.eventLog.Close()
+		_ = e.eventLog.Close()
 	}
 }
 
@@ -631,7 +631,7 @@ func (e *Engine) transition(itemID string, event domain.Event, guard func(domain
 
 	// Log to event store
 	if e.eventLog != nil {
-		e.eventLog.Append(domain.FSMEvent{
+		_ = e.eventLog.Append(domain.FSMEvent{
 			Timestamp: time.Now(),
 			ItemID:    itemID,
 			From:      result.From,

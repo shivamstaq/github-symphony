@@ -71,10 +71,6 @@ func TestProperty_SingleStateInvariant(t *testing.T) {
 			guard := guardForEvent(state, event)
 			result, err := domain.Transition(state, event, guard)
 			if err == nil {
-				// State must be exactly the transition target
-				if result.To != state && result.From != state {
-					// This would be a bug — From should be the previous state
-				}
 				state = result.To
 			}
 

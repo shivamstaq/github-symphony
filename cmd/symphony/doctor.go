@@ -154,7 +154,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			fmt.Printf("  WARN GitHub API unreachable: %v\n", err)
 		} else {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if resp.StatusCode == 200 {
 				fmt.Println("  ok   GitHub API reachable (authenticated)")
 			} else {

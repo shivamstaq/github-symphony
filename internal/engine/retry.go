@@ -46,7 +46,7 @@ func (e *Engine) handleWorkerError(itemID string, item domain.WorkItem, result a
 
 	if previousAttempt >= maxRetries {
 		// Max retries exhausted → failed (terminal)
-		e.transition(itemID, domain.EventError, func(g domain.TransitionGuard) bool {
+		_, _ = e.transition(itemID, domain.EventError, func(g domain.TransitionGuard) bool {
 			return g == domain.GuardMaxRetriesExhausted
 		})
 		e.state.ErrorTotal++
@@ -56,7 +56,7 @@ func (e *Engine) handleWorkerError(itemID string, item domain.WorkItem, result a
 		)
 	} else {
 		// Has retries left → queued + schedule retry
-		e.transition(itemID, domain.EventError, func(g domain.TransitionGuard) bool {
+		_, _ = e.transition(itemID, domain.EventError, func(g domain.TransitionGuard) bool {
 			return g == domain.GuardHasRetriesLeft
 		})
 		errMsg := ""
@@ -142,7 +142,7 @@ func (e *Engine) dispatchItemWithRetry(ctx context.Context, item domain.WorkItem
 	}
 	e.state.Running[item.WorkItemID] = entry
 
-	e.transition(item.WorkItemID, domain.EventWorkspaceReady, nil)
+	_, _ = e.transition(item.WorkItemID, domain.EventWorkspaceReady, nil)
 	entry.Phase = domain.StateRunning
 
 	go e.runWorker(workerCtx, item, entry)

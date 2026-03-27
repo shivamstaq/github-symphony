@@ -50,5 +50,5 @@ func (e *Engine) handleStallDetected(evt EngineEvent) {
 	delete(e.state.Running, itemID)
 
 	// FSM: running -> needs_human
-	e.transition(itemID, domain.EventStallDetected, nil)
+	_, _ = e.transition(itemID, domain.EventStallDetected, nil)
 }

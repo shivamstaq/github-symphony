@@ -14,11 +14,8 @@ func (e *Engine) checkBudget(itemID string) {
 
 	budget := e.cfg.Agent.Budget
 
-	exceeded := false
 	// Per-item token limit
-	if budget.MaxTokensPerItem > 0 && entry.TotalTokens >= budget.MaxTokensPerItem {
-		exceeded = true
-	}
+	exceeded := budget.MaxTokensPerItem > 0 && entry.TotalTokens >= budget.MaxTokensPerItem
 	// Per-item cost limit
 	if !exceeded && budget.MaxCostPerItemUSD > 0 && entry.CostUSD >= budget.MaxCostPerItemUSD {
 		exceeded = true
@@ -56,5 +53,5 @@ func (e *Engine) handleBudgetExceeded(evt EngineEvent) {
 	delete(e.state.Running, itemID)
 
 	// FSM: running -> needs_human
-	e.transition(itemID, domain.EventBudgetExceeded, nil)
+	_, _ = e.transition(itemID, domain.EventBudgetExceeded, nil)
 }
